@@ -1,0 +1,29 @@
+.DS_Store
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+
+# Local or regenerated outputs
+outputs/*
+!outputs/.gitkeep
+!outputs/README.md
+!outputs/figures/
+outputs/figures/*
+!outputs/figures/.gitkeep
+*.log
+
+# Manuscript drafts and presentation materials are not needed for code review.
+*.docx
+*.pptx
+*.pdf
+
+# Protect third-party and large data by default. Release only after license review.
+data/raw/*
+!data/raw/.gitkeep
+data/features/*
+!data/features/.gitkeep
+data/processed/*
+!data/processed/.gitkeep
+data/natural_earth/*
+!data/natural_earth/.gitkeep
+!data/README.md

@@ -1,0 +1,19 @@
+cff-version: 1.2.0
+message: "If you use this code, please cite the associated article and this repository."
+title: "Assessing the reliability of machine learning-based global marine heat flow prediction with real observations and spatial validation"
+authors:
+  - family-names: "Sun"
+    given-names: "Yutong"
+version: "0.1.0"
+date-released: "2026-06-02"
+repository-code: "https://example.com/replace-with-repository-link"
+license: "MIT"
+preferred-citation:
+  type: article
+  title: "Assessing the reliability of machine learning-based global marine heat flow prediction with real observations and spatial validation"
+  authors:
+    - family-names: "Sun"
+      given-names: "Yutong"
+  journal: "Computers & Geosciences"
+  year: 2026
+  status: "submitted"

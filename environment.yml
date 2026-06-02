@@ -1,0 +1,23 @@
+name: marine-heatflow-ml
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.11
+  - numpy
+  - pandas
+  - scipy
+  - scikit-learn
+  - xgboost
+  - lightgbm
+  - shap
+  - matplotlib
+  - cartopy
+  - geopandas
+  - shapely
+  - netcdf4
+  - pykrige
+  - scikit-gstat
+  - pillow
+  - openpyxl
+  - pip

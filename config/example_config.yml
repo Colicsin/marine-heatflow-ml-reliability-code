@@ -1,0 +1,57 @@
+# Example configuration for a public reproducibility wrapper.
+# The current experiment scripts do not yet read this file directly.
+
+project_root: "."
+
+paths:
+  data_dir: "data"
+  raw_dir: "data/raw"
+  feature_dir: "data/features"
+  processed_dir: "data/processed"
+  output_dir: "outputs"
+  figures_dir: "outputs/figures"
+
+data_files:
+  ghfdb_csv: "data/raw/IHFC_2024_GHFDB.csv"
+  ghfdb_txt: "data/raw/IHFC_2024_GHFDB_v.2026.03.txt"
+  age_grid_nc: "data/raw/Muller_etal_2019_Tectonics_v2.0_PresentDay_AgeGrid.nc"
+  feature_grid_0p5: "data/features/Ocean_HeatFlow_Prediction_Data_with_Age.csv"
+  feature_grid_1p0: "data/features/Ocean_HeatFlow_Prediction_Data_1x1deg.csv"
+  feature_grid_0p25: "data/features/Ocean_HeatFlow_Prediction_Data_0.25x0.25deg.csv"
+  natural_earth_land_10m: "data/natural_earth/ne_10m_land.shp"
+  natural_earth_land_110m: "data/natural_earth/ne_110m_land.shp"
+  main_dataset: "data/processed/dataset_D_no_aggregation.csv"
+
+parameters:
+  heatflow_min_mw_m2: 0.0
+  heatflow_max_mw_m2: 250.0
+  grid_resolution_deg: 0.5
+  random_seed: 42
+  test_ratio: 0.3
+  spatial_block_size_deg: 2.0
+  min_records_per_block: 3
+  moran_knn_k: 8
+  block_sensitivity_sizes_deg: [1.0, 1.5, 2.0, 3.0, 4.0]
+  block_sensitivity_seeds: [42, 123, 456, 789, 2024]
+
+models:
+  random_forest:
+    n_estimators: 100
+    max_depth: 20
+    random_state: 42
+  extra_trees:
+    n_estimators: 100
+    max_depth: 20
+    random_state: 42
+  gradient_boosting:
+    n_estimators: 100
+    max_depth: 6
+    random_state: 42
+  xgboost:
+    n_estimators: 100
+    max_depth: 6
+    random_state: 42
+  lightgbm:
+    n_estimators: 100
+    max_depth: 6
+    random_state: 42
