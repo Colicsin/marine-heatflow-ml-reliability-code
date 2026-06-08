@@ -1,4 +1,4 @@
-"""导出 Dataset D 完整数据集"""
+"""Export the complete Dataset D used by the main experiments."""
 from pathlib import Path
 import numpy as np
 import pandas as pd
@@ -22,7 +22,7 @@ FEATURE_COLS = [
     "EMAG2_sealevel", "EMAG2_upcont", "LITH_IDW_lab", "LITH_IDW_moho",
 ]
 
-# 读取 + 过滤
+
 df = pd.read_csv(RAW_PATH, sep="\t", skiprows=12, encoding="latin-1", low_memory=False)
 df = df[df["environment"].isin(["[offshore (continental)]", "[offshore (marine)]"])].copy()
 df["q"] = pd.to_numeric(df["q"], errors="coerce")
@@ -33,15 +33,15 @@ df = df[(df["q"] > 0) & (df["q"] <= 250)]
 df = df[(df["lat_NS"] >= -90) & (df["lat_NS"] <= 90)]
 df = df[(df["long_EW"] >= -180) & (df["long_EW"] <= 180)]
 
-# 质量等级
+
 df["qc_u"] = df["Quality_Score_Parent"].astype(str).str.extract(r"^(U[0-9x])")[0]
 df["qc_m"] = df["Quality_Score_Parent"].astype(str).str.extract(r"\.(M[0-9x]+)\.")[0]
 
-# 网格
+
 df["grid_lat"] = (np.floor(df["lat_NS"] / RES) * RES + RES / 2).round(2)
 df["grid_lon"] = (np.floor(df["long_EW"] / RES) * RES + RES / 2).round(2)
 
-# 陆地掩膜
+
 land = gpd.read_file(NE10_PATH)
 ug = df[["grid_lat", "grid_lon"]].drop_duplicates()
 geom = [Point(r.grid_lon, r.grid_lat) for r in ug.itertuples()]
@@ -51,14 +51,14 @@ land_set = set(zip(jn[jn["index_right"].notna()]["grid_lat"], jn[jn["index_right
 df["_gk"] = list(zip(df["grid_lat"], df["grid_lon"]))
 df = df[~df["_gk"].isin(land_set)].drop(columns=["_gk"])
 
-# 匹配特征
+
 feat = pd.read_csv(FEAT_PATH, usecols=["lon", "lat"] + FEATURE_COLS)
 feat["grid_lon"] = feat["lon"].round(2)
 feat["grid_lat"] = feat["lat"].round(2)
 feat = feat.drop(columns=["lon", "lat"]).drop_duplicates(subset=["grid_lon", "grid_lat"])
 df = df.merge(feat, on=["grid_lon", "grid_lat"], how="left")
 
-# 洋壳年龄
+
 ds = nc.Dataset(str(NC_PATH))
 nc_lon, nc_lat, nc_age = ds.variables["lon"][:], ds.variables["lat"][:], ds.variables["z"][:]
 ug2 = df[["grid_lat", "grid_lon"]].drop_duplicates()
@@ -76,11 +76,11 @@ for _, row in ug2.iterrows():
 ds.close()
 df["oceanic_crust_age_Ma"] = df.apply(lambda r: age_map.get((r["grid_lat"], r["grid_lon"]), np.nan), axis=1)
 
-# 清理
+
 df = df.dropna(subset=FEATURE_COLS).copy()
 df["oceanic_crust_age_Ma"] = df["oceanic_crust_age_Ma"].fillna(-1.0)
 
-# 洋盆
+
 def assign_basin(lon, lat):
     if lat < -60: return "Southern"
     if lon < -20 or lon > 140: return "Pacific"
@@ -88,7 +88,7 @@ def assign_basin(lon, lat):
     return "Indian"
 df["basin"] = df.apply(lambda r: assign_basin(r["grid_lon"], r["grid_lat"]), axis=1)
 
-# 导出
+
 out_cols = ["q", "lat_NS", "long_EW", "grid_lat", "grid_lon"] + FEATURE_COLS + ["oceanic_crust_age_Ma", "basin", "qc_u", "qc_m"]
 df[out_cols].to_csv(OUT_PATH, index=False)
 print(f"导出完成: {OUT_PATH}")

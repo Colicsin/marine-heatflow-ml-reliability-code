@@ -1,20 +1,4 @@
-"""
-预测结果可视化：基于 0.5° 数据集 D
-训练策略：空间分组 2°×2°，训练集训练 ExtraTrees，测试集评估
-全球预测：用全量数据重新训练，对 123,890 个全球海洋网格预测
-
-输出文件：
-  CSV:
-    outputs/step11_global_predictions.csv     — 全球网格预测表 (lon, lat, q_pred)
-    outputs/step11_test_predictions.csv       — 测试集预测与残差
-  图:
-    outputs/figures/step11_global_pred_map.png       — 全球海洋热流预测图
-    outputs/figures/step11_test_pred_map.png         — 测试集预测值空间分布
-    outputs/figures/step11_test_residual_map.png     — 测试集残差空间分布
-    outputs/figures/step11_basin_residual_hist.png   — 各洋盆残差直方图
-    outputs/figures/step11_large_residual_map.png    — 大残差点（>30）空间分布
-    outputs/figures/step11_scatter_obs_pred.png      — 观测 vs 预测散点图
-"""
+"""Generate global prediction maps and residual diagnostics from the Dataset D model."""
 
 from pathlib import Path
 import numpy as np
@@ -53,9 +37,7 @@ FEATURE_COLS = [
 ]
 TARGET = "q"
 
-# ════════════════════════════════════════════════════════════════════
-# 工具函数
-# ════════════════════════════════════════════════════════════════════
+
 def calc_metrics(y_true, y_pred):
     r2   = r2_score(y_true, y_pred)
     rmse = float(np.sqrt(mean_squared_error(y_true, y_pred)))
@@ -72,16 +54,14 @@ def base_map(ax, title, fontsize=12):
                  alpha=0.4, linestyle="--")
     ax.set_title(title, fontsize=fontsize, fontweight="bold", pad=8)
 
-# ════════════════════════════════════════════════════════════════════
-# 1. 加载观测数据，空间分组划分训练/测试集
-# ════════════════════════════════════════════════════════════════════
+
 print("=" * 60)
 print("加载观测数据...")
 df = pd.read_csv(DATA_PATH)
 print(f"  记录数: {len(df):,}  网格数: {df[['grid_lat','grid_lon']].drop_duplicates().shape[0]:,}")
 
 print("空间分组 2°×2° 划分训练/测试集...")
-df["block_id"] = ((df["grid_lat"] // 2) * 2).astype(str) + "_" + \
+df["block_id"] = ((df["grid_lat"] // 2) * 2).astype(str) + "_" +\
                  ((df["grid_lon"] // 2) * 2).astype(str)
 valid_blocks = df["block_id"].value_counts()
 valid_blocks = valid_blocks[valid_blocks >= 3].index
@@ -96,9 +76,7 @@ train_df = df2[~df2["block_id"].isin(test_blocks)].copy()
 test_df  = df2[ df2["block_id"].isin(test_blocks)].copy()
 print(f"  训练集: {len(train_df):,}  测试集: {len(test_df):,}  blocks: {len(blocks)}")
 
-# ════════════════════════════════════════════════════════════════════
-# 2. 训练模型（空间分组训练集）→ 评估测试集
-# ════════════════════════════════════════════════════════════════════
+
 print("训练 ExtraTrees（空间分组训练集）...")
 model_cv = ExtraTreesRegressor(n_estimators=100, max_depth=20, random_state=42, n_jobs=-1)
 model_cv.fit(train_df[FEATURE_COLS].values, train_df[TARGET].values)
@@ -111,15 +89,13 @@ test_df["abs_resid"]= test_df["residual"].abs()
 r2, rmse, mae, bias = calc_metrics(test_df[TARGET], test_df["q_pred"])
 print(f"  测试集: R²={r2:.4f}  RMSE={rmse:.2f}  MAE={mae:.2f}  Bias={bias:.2f}")
 
-# 保存测试集预测
+
 save_cols = ["lat_NS", "long_EW", "grid_lat", "grid_lon", "basin", "qc_m",
              TARGET, "q_pred", "residual", "abs_resid"]
 test_df[save_cols].to_csv(OUT_DIR / "step11_test_predictions.csv", index=False)
 print(f"  已保存: outputs/step11_test_predictions.csv")
 
-# ════════════════════════════════════════════════════════════════════
-# 3. 全量训练 → 全球网格预测
-# ════════════════════════════════════════════════════════════════════
+
 print("全量训练 ExtraTrees（全部 28,642 条记录）...")
 model_full = ExtraTreesRegressor(n_estimators=100, max_depth=20, random_state=42, n_jobs=-1)
 model_full.fit(df[FEATURE_COLS].values, df[TARGET].values)
@@ -136,9 +112,7 @@ globe_out.to_csv(OUT_DIR / "step11_global_predictions.csv", index=False)
 print(f"  已保存: outputs/step11_global_predictions.csv")
 print(f"  预测值范围: {globe_out['q_pred_mWm2'].min():.1f} ~ {globe_out['q_pred_mWm2'].max():.1f} mW/m²")
 
-# ════════════════════════════════════════════════════════════════════
-# 图1：全球海洋热流预测图
-# ════════════════════════════════════════════════════════════════════
+
 print("\n绘制图1：全球海洋热流预测图...")
 
 fig, ax = plt.subplots(figsize=(18, 9),
@@ -165,9 +139,7 @@ fig.savefig(FIG_DIR / "step11_global_pred_map.png", dpi=200, bbox_inches="tight"
 plt.close(fig)
 print(f"  已保存: step11_global_pred_map.png")
 
-# ════════════════════════════════════════════════════════════════════
-# 图2：测试集预测值空间分布
-# ════════════════════════════════════════════════════════════════════
+
 print("绘制图2：测试集预测值空间分布...")
 
 fig, ax = plt.subplots(figsize=(16, 8),
@@ -191,9 +163,7 @@ fig.savefig(FIG_DIR / "step11_test_pred_map.png", dpi=200, bbox_inches="tight")
 plt.close(fig)
 print(f"  已保存: step11_test_pred_map.png")
 
-# ════════════════════════════════════════════════════════════════════
-# 图3：测试集残差空间分布
-# ════════════════════════════════════════════════════════════════════
+
 print("绘制图3：测试集残差空间分布...")
 
 fig, ax = plt.subplots(figsize=(16, 8),
@@ -218,9 +188,7 @@ fig.savefig(FIG_DIR / "step11_test_residual_map.png", dpi=200, bbox_inches="tigh
 plt.close(fig)
 print(f"  已保存: step11_test_residual_map.png")
 
-# ════════════════════════════════════════════════════════════════════
-# 图4：各洋盆残差直方图
-# ════════════════════════════════════════════════════════════════════
+
 print("绘制图4：各洋盆残差直方图...")
 
 basins = ["Pacific", "Atlantic", "Indian"]
@@ -244,7 +212,7 @@ for i, basin in enumerate(basins):
     axes[i].legend(fontsize=9)
     axes[i].spines[["top", "right"]].set_visible(False)
 
-    # 指标文字
+
     axes[i].text(0.97, 0.95,
                  f"R²={r2_b:.3f}\nRMSE={rmse_b:.1f}\nMAE={mae_b:.1f}",
                  transform=axes[i].transAxes, fontsize=9,
@@ -257,9 +225,7 @@ fig.savefig(FIG_DIR / "step11_basin_residual_hist.png", dpi=200, bbox_inches="ti
 plt.close(fig)
 print(f"  已保存: step11_basin_residual_hist.png")
 
-# ════════════════════════════════════════════════════════════════════
-# 图5：大残差点（|residual| > 30）空间分布
-# ════════════════════════════════════════════════════════════════════
+
 print("绘制图5：大残差点空间分布（|residual| > 30）...")
 
 large = test_df[test_df["abs_resid"] > 30].copy()
@@ -273,12 +239,12 @@ base_map(ax, f"Large Residuals  |residual| > 30 mW/m²\n"
              f"n={n_large:,} / {len(test_df):,} ({pct:.1f}%)  "
              f"|  Red = overestimate, Blue = underestimate")
 
-# 背景小残差点
+
 ax.scatter(small["long_EW"], small["lat_NS"],
            c="#bbbbbb", s=2.5, alpha=0.3, linewidths=0,
            transform=ccrs.PlateCarree(), zorder=4)
 
-# 点大小按绝对残差缩放
+
 def sscale(v, vmin=30, s0=15, s1=120):
     vmax = max(v.max(), vmin + 1)
     return s0 + (v - vmin) / (vmax - vmin) * (s1 - s0)
@@ -304,7 +270,7 @@ if len(under) > 0:
                transform=ccrs.PlateCarree(), zorder=5,
                label=f"Underestimate  n={len(under):,}")
 
-# 两个颜色条
+
 for cmap_name, label, pad in [("Reds", "Overestimate (mW/m²)", 0.01),
                                 ("Blues", "Underestimate (mW/m²)", 0.06)]:
     sm = plt.cm.ScalarMappable(cmap=cmap_name,
@@ -323,9 +289,7 @@ fig.savefig(FIG_DIR / "step11_large_residual_map.png", dpi=200, bbox_inches="tig
 plt.close(fig)
 print(f"  已保存: step11_large_residual_map.png")
 
-# ════════════════════════════════════════════════════════════════════
-# 图6：观测 vs 预测散点图（含 1:1 线和各洋盆分色）
-# ════════════════════════════════════════════════════════════════════
+
 print("绘制图6：观测 vs 预测散点图...")
 
 fig, ax = plt.subplots(figsize=(7, 7))
@@ -352,9 +316,7 @@ fig.savefig(FIG_DIR / "step11_scatter_obs_pred.png", dpi=200, bbox_inches="tight
 plt.close(fig)
 print(f"  已保存: step11_scatter_obs_pred.png")
 
-# ════════════════════════════════════════════════════════════════════
-# 汇总
-# ════════════════════════════════════════════════════════════════════
+
 print()
 print("=" * 60)
 print("全部完成！输出文件：")

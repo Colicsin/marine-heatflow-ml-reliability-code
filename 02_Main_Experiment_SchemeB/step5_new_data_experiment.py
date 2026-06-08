@@ -1,10 +1,4 @@
-"""
-新数据实验：不聚合热流 + 质量分级 + 6模型 × 3验证方案
-
-数据源: IHFC_2024_GHFDB_v.2026.03.txt (新版GHFDB)
-策略: 保留每条原始热流记录，特征取所在0.5°网格的值
-质量分级: 按 Quality_Score_Parent 的 M 等级构建 A/B/C/D 四个数据集
-"""
+"""Run observation-level quality-tier experiments across models and validation schemes."""
 
 from pathlib import Path
 import numpy as np
@@ -46,9 +40,7 @@ FEATURE_COLS = [
 ]
 TARGET = "q"
 
-# ═══════════════════════════════════════════════════════════════════
-# Step A: 读取新数据 + 基础过滤
-# ═══════════════════════════════════════════════════════════════════
+
 print("=" * 70)
 print("Step A: 读取新数据 + 基础过滤")
 print("=" * 70)
@@ -57,12 +49,12 @@ df = pd.read_csv(RAW_PATH, sep="\t", skiprows=12, encoding="latin-1",
                  low_memory=False)
 print(f"  原始总行数: {len(df):,}")
 
-# 筛选海洋记录
+
 marine_env = ["[offshore (continental)]", "[offshore (marine)]"]
 df = df[df["environment"].isin(marine_env)].copy()
 print(f"  保留 offshore: {len(df):,}")
 
-# 数值转换 + 过滤异常值
+
 df["q"] = pd.to_numeric(df["q"], errors="coerce")
 df["lat_NS"] = pd.to_numeric(df["lat_NS"], errors="coerce")
 df["long_EW"] = pd.to_numeric(df["long_EW"], errors="coerce")
@@ -72,7 +64,7 @@ df = df[(df["lat_NS"] >= -90) & (df["lat_NS"] <= 90)]
 df = df[(df["long_EW"] >= -180) & (df["long_EW"] <= 180)]
 print(f"  过滤异常值后: {len(df):,}")
 
-# 解析质量等级
+
 df["qc_u"] = df["Quality_Score_Parent"].astype(str).str.extract(r"^(U[0-9x])")[0]
 df["qc_m"] = df["Quality_Score_Parent"].astype(str).str.extract(r"\.(M[0-9x]+)\.")[0]
 print(f"  M等级分布:")
@@ -81,19 +73,17 @@ for m in ["M1", "M1x", "M2", "M2x", "M3", "M3x", "M4", "M4x", "Mx"]:
     if n > 0:
         print(f"    {m}: {n:,}")
 
-# ═══════════════════════════════════════════════════════════════════
-# Step B: 分配网格 + 匹配特征（不聚合热流）
-# ═══════════════════════════════════════════════════════════════════
+
 print()
 print("=" * 70)
 print("Step B: 分配网格 + 匹配特征")
 print("=" * 70)
 
-# 分配 0.5° 网格
+
 df["grid_lat"] = (np.floor(df["lat_NS"] / RES) * RES + RES / 2).round(2)
 df["grid_lon"] = (np.floor(df["long_EW"] / RES) * RES + RES / 2).round(2)
 
-# 陆地掩膜
+
 print("  加载陆地掩膜...")
 land = gpd.read_file(NE10_PATH)
 unique_grids = df[["grid_lat", "grid_lon"]].drop_duplicates()
@@ -109,7 +99,7 @@ df["_grid_key"] = list(zip(df["grid_lat"], df["grid_lon"]))
 df = df[~df["_grid_key"].isin(land_grids)].drop(columns=["_grid_key"])
 print(f"  陆地掩膜: {before:,} -> {len(df):,} (去除 {before - len(df):,})")
 
-# 匹配 13 个特征
+
 print("  匹配特征...")
 feat = pd.read_csv(FEAT_PATH, usecols=["lon", "lat"] + FEATURE_COLS)
 feat["grid_lon"] = feat["lon"].round(2)
@@ -121,7 +111,7 @@ df = df.merge(feat, on=["grid_lon", "grid_lat"], how="left")
 n_matched = df[FEATURE_COLS[0]].notna().sum()
 print(f"  特征匹配: {n_matched:,} / {len(df):,}")
 
-# 提取洋壳年龄
+
 print("  提取洋壳年龄...")
 ds = nc.Dataset(str(NC_PATH))
 nc_lon = ds.variables["lon"][:]
@@ -150,14 +140,14 @@ df["oceanic_crust_age_Ma"] = df.apply(
 n_age = df["oceanic_crust_age_Ma"].notna().sum()
 print(f"  洋壳年龄匹配: {n_age:,} / {len(df):,}")
 
-# 丢弃 13 个基础特征缺失的记录
+
 ALL_FEAT = FEATURE_COLS + ["oceanic_crust_age_Ma"]
 before = len(df)
 df = df.dropna(subset=FEATURE_COLS).copy()
 df["oceanic_crust_age_Ma"] = df["oceanic_crust_age_Ma"].fillna(-1.0)
 print(f"  丢弃特征缺失: {before:,} -> {len(df):,}")
 
-# 洋盆标签
+
 def assign_basin(lon, lat):
     if lat < -60:
         return "Southern"
@@ -174,9 +164,7 @@ df["basin"] = df.apply(lambda r: assign_basin(r["grid_lon"], r["grid_lat"]), axi
 print(f"\n  最终数据集: {len(df):,} 条记录, {df[['grid_lat','grid_lon']].drop_duplicates().shape[0]:,} 个网格")
 print(f"  洋盆分布: {dict(df['basin'].value_counts())}")
 
-# ═══════════════════════════════════════════════════════════════════
-# Step C: 构建质量分级数据集
-# ═══════════════════════════════════════════════════════════════════
+
 print()
 print("=" * 70)
 print("Step C: 质量分级数据集")
@@ -187,7 +175,7 @@ DATASETS = {
     "B: M1-M2(含x)":       ["M1", "M1x", "M2", "M2x"],
     "C: M1-M3(含x)":       ["M1", "M1x", "M2", "M2x", "M3", "M3x"],
     "ALL: 排除Mx":         ["M1", "M1x", "M2", "M2x", "M3", "M3x", "M4", "M4x"],
-    "D: 全部(含Mx)":       None,  # 不筛选
+    "D: 全部(含Mx)":       None,
 }
 
 for label, m_levels in DATASETS.items():
@@ -199,9 +187,7 @@ for label, m_levels in DATASETS.items():
     print(f"  {label:<20} 记录={len(sub):>6,}  网格={n_grids:>5,}  "
           f"q均值={sub['q'].mean():.1f}  q中位数={sub['q'].median():.1f}  q标准差={sub['q'].std():.1f}")
 
-# ═══════════════════════════════════════════════════════════════════
-# Step D: 6模型 × 3验证方案 × 质量分级
-# ═══════════════════════════════════════════════════════════════════
+
 print()
 print("=" * 70)
 print("Step D: 模型训练与验证")
@@ -241,7 +227,7 @@ for ds_label, m_levels in DATASETS.items():
     print(f"数据集: {ds_label}  ({len(sub):,} 条记录)")
     print(f"{'='*70}")
 
-    # ── 方案1: 随机划分 7:3 ──
+
     X_tr, X_te, y_tr, y_te = train_test_split(X, y, test_size=0.3, random_state=42)
     print(f"\n  方案1: 随机划分 (train={len(y_tr):,}, test={len(y_te):,})")
     print(f"  {'模型':<12} {'R²':>8} {'RMSE':>8} {'MAE':>8} {'Bias':>8}")
@@ -253,9 +239,9 @@ for ds_label, m_levels in DATASETS.items():
         print(f"  {mname:<12} {r2:>8.4f} {rmse:>8.2f} {mae:>8.2f} {bias:>8.2f}")
         results.append((ds_label, "随机划分", mname, len(sub), len(y_te), r2, rmse, mae, bias))
 
-    # ── 方案2: 空间分组 2°×2° (同网格记录不分离) ──
+
     sub2 = sub.copy()
-    sub2["block_id"] = ((sub2["grid_lat"] // 2) * 2).astype(str) + "_" + \
+    sub2["block_id"] = ((sub2["grid_lat"] // 2) * 2).astype(str) + "_" +\
                        ((sub2["grid_lon"] // 2) * 2).astype(str)
     block_counts = sub2["block_id"].value_counts()
     valid_blocks = block_counts[block_counts >= 3].index
@@ -283,7 +269,7 @@ for ds_label, m_levels in DATASETS.items():
     else:
         print(f"\n  方案2: 空间分组 - 样本不足, 跳过")
 
-    # ── 方案3: 跨洋盆验证 (ExtraTrees) ──
+
     print(f"\n  方案3: 跨洋盆验证 (ExtraTrees)")
     print(f"  {'洋盆':<12} {'R²':>8} {'RMSE':>8} {'MAE':>8} {'Bias':>8}")
     print("  " + "-" * 48)
@@ -301,9 +287,7 @@ for ds_label, m_levels in DATASETS.items():
         else:
             print(f"  {basin:<12} 样本不足")
 
-# ═══════════════════════════════════════════════════════════════════
-# Step E: 汇总表
-# ═══════════════════════════════════════════════════════════════════
+
 print()
 print("=" * 90)
 print("汇总: ExtraTrees 在各数据集 × 各验证方案下的 R²")

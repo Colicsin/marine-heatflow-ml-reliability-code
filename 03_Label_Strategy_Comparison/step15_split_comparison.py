@@ -1,14 +1,4 @@
-"""
-Step15 补充：空间分组 vs 随机划分对比
-
-读取：
-  outputs/step15_self_eval_summary.csv
-  outputs/step15_random_self_eval_summary.csv
-
-输出：
-  outputs/step15_split_comparison.csv
-  outputs/figures/step15_split_comparison.png
-"""
+"""Compare random and spatial-block validation results from label-strategy self-evaluation."""
 
 from pathlib import Path
 import pandas as pd

@@ -20,7 +20,6 @@ OUT_DIR.mkdir(parents=True, exist_ok=True)
 OUT_PATH = OUT_DIR / "step4_observed_heatflow_robinson.png"
 
 
-# Robinson projection lookup table (Snyder, 1993), 5-degree intervals.
 ROBINSON_X = np.array([
     1.0000, 0.9986, 0.9954, 0.9900, 0.9822, 0.9730, 0.9600, 0.9427, 0.9216,
     0.8962, 0.8679, 0.8350, 0.7986, 0.7597, 0.7186, 0.6732, 0.6213, 0.5722, 0.5322
@@ -55,7 +54,7 @@ def read_polygon_parts(shp_path: Path):
     with shp_path.open("rb") as f:
         data = f.read()
 
-    pos = 100  # skip shapefile header
+    pos = 100
     polygons = []
 
     while pos + 8 <= len(data):

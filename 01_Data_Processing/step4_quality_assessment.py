@@ -1,12 +1,4 @@
-"""
-Step 4: 数据最终整合 + 质量评估 + 可视化
-
-处理规则：
-  - 丢弃13个基础特征有缺失的897个格点
-  - 洋壳年龄NaN填 -1（大陆架标记值）
-  - 输出最终可用数据集 final_dataset.csv
-  - 生成完整的质量评估可视化
-"""
+"""Finalize the gridded dataset and generate quality-assessment outputs."""
 
 from pathlib import Path
 import numpy as np
@@ -39,25 +31,25 @@ FEATURE_COLS = [
     "oceanic_crust_age_Ma",
 ]
 
-# ── 1. 读取并整合 ─────────────────────────────────────────────────
+
 df = pd.read_csv(DATA_PATH)
 print(f"原始格点数: {len(df):,}")
 
-# 丢弃13个基础特征有缺失的格点
-base_cols = FEATURE_COLS[:-1]  # 不含洋壳年龄
+
+base_cols = FEATURE_COLS[:-1]
 df = df.dropna(subset=base_cols).copy()
 print(f"丢弃特征缺失格点后: {len(df):,}")
 
-# 洋壳年龄NaN填-1
+
 n_age_nan = df["oceanic_crust_age_Ma"].isna().sum()
 df["oceanic_crust_age_Ma"] = df["oceanic_crust_age_Ma"].fillna(-1.0)
 print(f"洋壳年龄NaN填-1: {n_age_nan:,} 个格点")
 
-# 确认无缺失
+
 assert df[FEATURE_COLS].isna().sum().sum() == 0, "仍有缺失值！"
 assert df["median_q"].isna().sum() == 0
 
-# 洋盆标签（从旧数据集复用逻辑：简单按经纬度判断）
+
 def assign_basin(lon, lat):
     if lat < -60:
         return "Southern"
@@ -83,19 +75,19 @@ print(f"\n洋壳年龄分布:")
 print(f"  有洋壳年龄(>0): {(df['oceanic_crust_age_Ma']>0).sum():,}")
 print(f"  大陆架(-1):     {(df['oceanic_crust_age_Ma']==-1).sum():,}")
 
-# 保存最终数据集
+
 out_path = OUT_DIR / "final_dataset.csv"
 df.to_csv(out_path, index=False)
 print(f"\n保存至: {out_path}")
 
-# ── 2. 可视化 ─────────────────────────────────────────────────────
+
 print("\n生成可视化...")
 world = gpd.read_file(NE10_PATH)
 fig = plt.figure(figsize=(22, 18))
 fig.patch.set_facecolor('#0d1117')
 gs = gridspec.GridSpec(3, 3, figure=fig, hspace=0.35, wspace=0.3)
 
-# ── 图1：全球分布（按热流值着色）────────────────────────────────
+
 ax1 = fig.add_subplot(gs[0, :])
 ax1.set_facecolor('#0a1628')
 world.plot(ax=ax1, color='#2a2a3a', edgecolor='#555', linewidth=0.3)
@@ -114,7 +106,7 @@ ax1.tick_params(colors="white")
 ax1.grid(color="#222", linewidth=0.3, alpha=0.5)
 for sp in ax1.spines.values(): sp.set_edgecolor("#444")
 
-# ── 图2：热流值分布直方图 ────────────────────────────────────────
+
 ax2 = fig.add_subplot(gs[1, 0])
 ax2.set_facecolor('#0d1117')
 ax2.hist(df["median_q"], bins=60, color="#ff6b35", alpha=0.8, edgecolor="#333", linewidth=0.3)
@@ -128,7 +120,7 @@ ax2.tick_params(colors="white"); ax2.grid(color="#222", linewidth=0.3, alpha=0.5
 ax2.legend(fontsize=8, facecolor="#1a1a2e", labelcolor="white")
 for sp in ax2.spines.values(): sp.set_edgecolor("#444")
 
-# ── 图3：观测数量分布 ────────────────────────────────────────────
+
 ax3 = fig.add_subplot(gs[1, 1])
 ax3.set_facecolor('#0d1117')
 count_bins = [1,2,3,5,10,50,9999,99999]
@@ -148,7 +140,7 @@ ax3.set_title("Observation Count per Grid Cell", color="white", fontsize=11)
 ax3.tick_params(colors="white"); ax3.grid(axis="y", color="#222", linewidth=0.3, alpha=0.5)
 for sp in ax3.spines.values(): sp.set_edgecolor("#444")
 
-# ── 图4：洋壳年龄分布 ────────────────────────────────────────────
+
 ax4 = fig.add_subplot(gs[1, 2])
 ax4.set_facecolor('#0d1117')
 age_valid = df[df["oceanic_crust_age_Ma"] > 0]["oceanic_crust_age_Ma"]
@@ -163,7 +155,7 @@ ax4.tick_params(colors="white"); ax4.grid(color="#222", linewidth=0.3, alpha=0.5
 ax4.legend(fontsize=8, facecolor="#1a1a2e", labelcolor="white")
 for sp in ax4.spines.values(): sp.set_edgecolor("#444")
 
-# ── 图5：各洋盆热流箱线图 ────────────────────────────────────────
+
 ax5 = fig.add_subplot(gs[2, 0])
 ax5.set_facecolor('#0d1117')
 basins_order = ["Pacific", "Atlantic", "Indian", "Southern", "Other"]
@@ -185,7 +177,7 @@ ax5.set_title("Heat Flow by Basin", color="white", fontsize=11)
 ax5.tick_params(colors="white"); ax5.grid(axis="y", color="#222", linewidth=0.3, alpha=0.5)
 for sp in ax5.spines.values(): sp.set_edgecolor("#444")
 
-# ── 图6：热流 vs 洋壳年龄散点 ────────────────────────────────────
+
 ax6 = fig.add_subplot(gs[2, 1])
 ax6.set_facecolor('#0d1117')
 df_age = df[df["oceanic_crust_age_Ma"] > 0]
@@ -198,7 +190,7 @@ ax6.set_title("Heat Flow vs Oceanic Crust Age\n(plate cooling trend expected)", 
 ax6.tick_params(colors="white"); ax6.grid(color="#222", linewidth=0.3, alpha=0.5)
 for sp in ax6.spines.values(): sp.set_edgecolor("#444")
 
-# ── 图7：纬度带分布 ──────────────────────────────────────────────
+
 ax7 = fig.add_subplot(gs[2, 2])
 ax7.set_facecolor('#0d1117')
 lat_bins = np.arange(-90, 91, 10)

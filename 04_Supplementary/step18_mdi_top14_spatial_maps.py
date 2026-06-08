@@ -1,14 +1,4 @@
-"""
-Generate global spatial maps for the MDI-pruned Top14 features and the
-corresponding full-data ExtraTrees prediction.
-
-Outputs:
-  outputs/figures/mdi_top14_spatial_maps/
-    map_00_global_heatflow_prediction_mdi_top14.png/.svg
-    map_01_... map_14_... feature maps as png/svg
-    mdi_top14_prediction_grid.csv
-    mdi_top14_spatial_map_summary.csv
-"""
+"""Generate global spatial maps for MDI-pruned features and full-data predictions."""
 
 from __future__ import annotations
 

@@ -16,14 +16,13 @@ def main():
     if not SRC.exists():
         raise FileNotFoundError(f"Source figure not found: {SRC}")
 
-    # Keep the old figure for comparison if it exists.
+
     if DST.exists() and not BACKUP.exists():
         DST.replace(BACKUP)
 
     img = Image.open(SRC).convert("RGB")
 
-    # Small paper-oriented polish: slightly stronger contrast and sharpness
-    # so the global heat-flow gradients read more clearly after scaling in Word.
+
     img = ImageEnhance.Contrast(img).enhance(1.06)
     img = ImageEnhance.Sharpness(img).enhance(1.08)
 

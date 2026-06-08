@@ -1,23 +1,4 @@
-"""
-Step14: 三种标签策略对比实验
-对比训练标签来源对ML预测精度的影响：
-  方法A: 全局 Ordinary Kriging 伪标签 → ExtraTrees
-  方法B: 真实观测直接预测（当前方法，基线）
-  方法C: 局部滑动窗口 Kriging 伪标签 → ExtraTrees
-
-三种方法共享：14个特征、ExtraTrees模型、空间分组2°×2°验证、真实观测q作为ground truth
-
-输出：
-  CSV:  outputs/step14_comparison_summary.csv
-  图1:  step14_scatter_3methods.png
-  图2:  step14_residual_map_3methods.png
-  图3:  step14_basin_comparison.png
-  图4:  step14_residual_hist_3methods.png
-  图5:  step14_high_hf_comparison.png
-
-依赖: pip install pykrige
-运行时间: 约40-80分钟（局部Kriging是瓶颈）
-"""
+"""Compare observed labels with global and local Kriging-derived labels on a shared observed test set."""
 
 from pathlib import Path
 import time
@@ -61,12 +42,9 @@ METHOD_NAMES = ["A: Global Kriging", "B: Direct Obs (Baseline)", "C: Local Krigi
 METHOD_COLORS = ["#e06c3a", "#3a7ebf", "#4caf7d"]
 
 
-# ════════════════════════════════════════════════════════════════════
-# 工具函数
-# ════════════════════════════════════════════════════════════════════
 def spatial_block_split(data, block_size=2.0, test_ratio=0.3, seed=42, min_per_block=3):
     d = data.copy()
-    d["block_id"] = ((d["grid_lat"] // block_size) * block_size).astype(str) + "_" + \
+    d["block_id"] = ((d["grid_lat"] // block_size) * block_size).astype(str) + "_" +\
                     ((d["grid_lon"] // block_size) * block_size).astype(str)
     bc = d["block_id"].value_counts()
     d = d[d["block_id"].isin(bc[bc >= min_per_block].index)]
@@ -107,9 +85,6 @@ def base_map(ax, title, fontsize=11):
     ax.set_title(title, fontsize=fontsize, fontweight="bold", pad=8)
 
 
-# ════════════════════════════════════════════════════════════════════
-# 阶段0：数据准备
-# ════════════════════════════════════════════════════════════════════
 print("=" * 70)
 print("阶段0：数据准备")
 print("=" * 70)
@@ -122,7 +97,7 @@ globe = pd.read_csv(GLOBE_PATH, usecols=["lon", "lat"] + FEATURE_COLS)
 globe = globe.dropna(subset=FEATURE_COLS)
 print(f"  全球网格: {len(globe):,} 个")
 
-# 统一空间分组划分（三种方法共享同一测试集）
+
 train_df, test_df = spatial_block_split(df)
 print(f"  训练集: {len(train_df):,}  测试集: {len(test_df):,}")
 
@@ -130,20 +105,17 @@ X_test  = test_df[FEATURE_COLS].values
 y_test  = test_df[TARGET].values
 basins  = test_df["basin"].values if "basin" in test_df.columns else np.array(["Unknown"] * len(test_df))
 
-# 存储三种方法的预测结果
+
 all_preds = {}
 
 
-# ════════════════════════════════════════════════════════════════════
-# 阶段1：方法A — 全局 Kriging 伪标签
-# ════════════════════════════════════════════════════════════════════
 print("\n" + "=" * 70)
 print("阶段1：方法A — 全局 Ordinary Kriging 伪标签")
 print("=" * 70)
 
 from pykrige.ok import OrdinaryKriging
 
-# 用训练集观测点做 Kriging（去重到网格级别，取中位数，减少点数加速）
+
 train_grid = train_df.groupby(["grid_lat", "grid_lon"])[TARGET].median().reset_index()
 print(f"  Kriging 输入点数: {len(train_grid):,}（训练集网格中位数）")
 
@@ -167,13 +139,13 @@ z_global, ss_global = ok_global.execute(
     backend="loop",
 )
 z_global = np.asarray(z_global)
-# 过滤不合理值
+
 bad = ~np.isfinite(z_global) | (z_global < 0) | (z_global > 500)
 z_global[bad] = np.nan
 n_valid_A = np.isfinite(z_global).sum()
 print(f"  Kriging 完成: {time.time()-t0:.1f}s  有效网格: {n_valid_A:,}/{len(globe):,}")
 
-# 用 Kriging 伪标签 + 特征训练 ExtraTrees
+
 globe_A = globe.copy()
 globe_A["q_label"] = z_global
 globe_A = globe_A.dropna(subset=["q_label"])
@@ -188,9 +160,6 @@ m_A = calc_metrics(y_test, pred_A)
 print(f"  测试集: R²={m_A['R2']:.4f}  RMSE={m_A['RMSE']:.2f}  MAE={m_A['MAE']:.2f}  Bias={m_A['Bias']:.2f}")
 
 
-# ════════════════════════════════════════════════════════════════════
-# 阶段2：方法B — 真实观测直接预测（基线）
-# ════════════════════════════════════════════════════════════════════
 print("\n" + "=" * 70)
 print("阶段2：方法B — 真实观测直接预测（基线）")
 print("=" * 70)
@@ -208,9 +177,6 @@ m_B = calc_metrics(y_test, pred_B)
 print(f"  测试集: R²={m_B['R2']:.4f}  RMSE={m_B['RMSE']:.2f}  MAE={m_B['MAE']:.2f}  Bias={m_B['Bias']:.2f}")
 
 
-# ════════════════════════════════════════════════════════════════════
-# 阶段3：方法C — 局部滑动窗口 Kriging 伪标签
-# ════════════════════════════════════════════════════════════════════
 print("\n" + "=" * 70)
 print("阶段3：方法C — 局部滑动窗口 Kriging 伪标签")
 print("=" * 70)
@@ -220,12 +186,12 @@ N_MIN      = 5
 D_MAX_KM   = 500.0
 HALF_W     = WINDOW_DEG / 2.0
 
-# 训练集观测点坐标（用原始点，不聚合）
+
 obs_lon = train_df["long_EW"].values
 obs_lat = train_df["lat_NS"].values
 obs_q   = train_df[TARGET].values
 
-# 预计算全球网格到最近观测点的距离（用于快速跳过远距离网格）
+
 def _to_xyz(lon, lat):
     lon_r, lat_r = np.radians(lon), np.radians(lat)
     return np.column_stack([np.cos(lat_r)*np.cos(lon_r),
@@ -235,13 +201,13 @@ def _to_xyz(lon, lat):
 obs_tree = cKDTree(_to_xyz(obs_lon, obs_lat))
 grid_xyz = _to_xyz(globe["lon"].values, globe["lat"].values)
 dist_chord, _ = obs_tree.query(grid_xyz, k=1)
-dist_km_all = dist_chord * 6371.0  # 弦距离近似转km
+dist_km_all = dist_chord * 6371.0
 
 n_skip = (dist_km_all > D_MAX_KM).sum()
 print(f"  窗口: {WINDOW_DEG}°×{WINDOW_DEG}°  n_min={N_MIN}  d_max={D_MAX_KM}km")
 print(f"  跳过远距离网格: {n_skip:,}/{len(globe):,} ({100*n_skip/len(globe):.1f}%)")
 
-# 逐点局部 Kriging
+
 preds_C = np.full(len(globe), np.nan)
 t0 = time.time()
 n_done = 0
@@ -253,7 +219,7 @@ for i in range(len(globe)):
     glon = globe["lon"].values[i]
     glat = globe["lat"].values[i]
 
-    # 矩形窗口快速过滤
+
     lon_mask = (obs_lon >= glon - HALF_W) & (obs_lon <= glon + HALF_W)
     lat_mask = (obs_lat >= glat - HALF_W) & (obs_lat <= glat + HALF_W)
     local_mask = lon_mask & lat_mask
@@ -286,7 +252,7 @@ n_valid_C = np.isfinite(preds_C).sum()
 print(f"  局部Kriging完成: {time.time()-t0:.1f}s  有效网格: {n_valid_C:,}/{len(globe):,} "
       f"({100*n_valid_C/len(globe):.1f}%)")
 
-# 用局部 Kriging 伪标签 + 特征训练 ExtraTrees
+
 globe_C = globe.copy()
 globe_C["q_label"] = preds_C
 globe_C = globe_C.dropna(subset=["q_label"])
@@ -301,9 +267,6 @@ m_C = calc_metrics(y_test, pred_C)
 print(f"  测试集: R²={m_C['R2']:.4f}  RMSE={m_C['RMSE']:.2f}  MAE={m_C['MAE']:.2f}  Bias={m_C['Bias']:.2f}")
 
 
-# ════════════════════════════════════════════════════════════════════
-# 阶段4：统一评估与对比
-# ════════════════════════════════════════════════════════════════════
 print("\n" + "=" * 70)
 print("阶段4：统一评估与对比")
 print("=" * 70)
@@ -311,7 +274,7 @@ print("=" * 70)
 all_metrics = {"A": m_A, "B": m_B, "C": m_C}
 basin_list = ["Pacific", "Atlantic", "Indian"]
 
-# 分洋盆指标
+
 basin_metrics = {}
 for key in ["A", "B", "C"]:
     pred = all_preds[key]
@@ -321,7 +284,7 @@ for key in ["A", "B", "C"]:
         if mask.sum() > 10:
             basin_metrics[key][basin] = calc_metrics(y_test[mask], pred[mask])
 
-# 高热流区指标
+
 high_mask = y_test > 100
 high_metrics = {}
 for key in ["A", "B", "C"]:
@@ -329,14 +292,14 @@ for key in ["A", "B", "C"]:
     if high_mask.sum() > 10:
         high_metrics[key] = calc_metrics(y_test[high_mask], pred[high_mask])
 
-# Moran's I
+
 coords_test = test_df[["grid_lat", "grid_lon"]].values
 moran_vals = {}
 for key in ["A", "B", "C"]:
     residuals = all_preds[key] - y_test
     moran_vals[key] = calc_moran_knn(coords_test, residuals, k=8)
 
-# 打印汇总表
+
 print(f"\n{'方法':<25} {'R²':>8} {'RMSE':>8} {'MAE':>8} {'Bias':>8} {'Moran I':>8}")
 print("-" * 70)
 for key, name in zip(["A", "B", "C"], METHOD_NAMES):
@@ -366,7 +329,7 @@ for key, name in zip(["A", "B", "C"], METHOD_NAMES):
     print(f"  {name:<23} {hm.get('R2', float('nan')):>8.4f} "
           f"{hm.get('RMSE', float('nan')):>8.2f} {hm.get('MAE', float('nan')):>8.2f}")
 
-# 保存汇总 CSV
+
 rows = []
 for key, name in zip(["A", "B", "C"], METHOD_NAMES):
     m = all_metrics[key]
@@ -384,14 +347,11 @@ summary_df.to_csv(OUT_DIR / "step14_comparison_summary.csv", index=False)
 print(f"\n已保存: outputs/step14_comparison_summary.csv")
 
 
-# ════════════════════════════════════════════════════════════════════
-# 阶段5：可视化
-# ════════════════════════════════════════════════════════════════════
 print("\n" + "=" * 70)
 print("阶段5：可视化")
 print("=" * 70)
 
-# ── 图1：三种方法散点图对比 ──────────────────────────────────────
+
 print("绘制图1：散点图对比...")
 
 fig, axes = plt.subplots(1, 3, figsize=(18, 5.5))
@@ -424,7 +384,7 @@ fig.savefig(FIG_DIR / "step14_scatter_3methods.png", dpi=200, bbox_inches="tight
 plt.close(fig)
 print("  已保存: step14_scatter_3methods.png")
 
-# ── 图2：三种方法残差空间分布 ────────────────────────────────────
+
 print("绘制图2：残差空间分布...")
 
 fig, axes = plt.subplots(1, 3, figsize=(20, 6),
@@ -453,14 +413,14 @@ fig.savefig(FIG_DIR / "step14_residual_map_3methods.png", dpi=200, bbox_inches="
 plt.close(fig)
 print("  已保存: step14_residual_map_3methods.png")
 
-# ── 图3：分洋盆 R²/RMSE 柱状图 ──────────────────────────────────
+
 print("绘制图3：分洋盆对比...")
 
 fig, axes = plt.subplots(1, 2, figsize=(14, 5.5))
 x = np.arange(len(basin_list))
 width = 0.25
 
-# R²
+
 ax = axes[0]
 for i, (key, name, color) in enumerate(zip(["A", "B", "C"], METHOD_NAMES, METHOD_COLORS)):
     vals = [basin_metrics[key].get(b, {}).get("R2", 0) for b in basin_list]
@@ -472,7 +432,7 @@ ax.set_title("R² by Ocean Basin", fontsize=12, fontweight="bold")
 ax.legend(fontsize=9)
 ax.spines[["top", "right"]].set_visible(False)
 
-# RMSE
+
 ax = axes[1]
 for i, (key, name, color) in enumerate(zip(["A", "B", "C"], METHOD_NAMES, METHOD_COLORS)):
     vals = [basin_metrics[key].get(b, {}).get("RMSE", 0) for b in basin_list]
@@ -490,7 +450,7 @@ fig.savefig(FIG_DIR / "step14_basin_comparison.png", dpi=200, bbox_inches="tight
 plt.close(fig)
 print("  已保存: step14_basin_comparison.png")
 
-# ── 图4：残差直方图叠加对比 ──────────────────────────────────────
+
 print("绘制图4：残差直方图...")
 
 fig, ax = plt.subplots(figsize=(10, 6))
@@ -513,7 +473,7 @@ fig.savefig(FIG_DIR / "step14_residual_hist_3methods.png", dpi=200, bbox_inches=
 plt.close(fig)
 print("  已保存: step14_residual_hist_3methods.png")
 
-# ── 图5：高热流区 RMSE 分段对比 ──────────────────────────────────
+
 print("绘制图5：高热流区分段对比...")
 
 hf_bins = [0, 60, 100, 150, 200, 350]
@@ -521,7 +481,7 @@ hf_labels = ["0-60", "60-100", "100-150", "150-200", ">200"]
 
 fig, axes = plt.subplots(1, 2, figsize=(14, 5.5))
 
-# RMSE 分段
+
 ax = axes[0]
 x = np.arange(len(hf_labels))
 for i, (key, name, color) in enumerate(zip(["A", "B", "C"], METHOD_NAMES, METHOD_COLORS)):
@@ -542,7 +502,7 @@ ax.set_title("RMSE by Heat Flow Bin", fontsize=12, fontweight="bold")
 ax.legend(fontsize=9)
 ax.spines[["top", "right"]].set_visible(False)
 
-# Bias 分段
+
 ax = axes[1]
 for i, (key, name, color) in enumerate(zip(["A", "B", "C"], METHOD_NAMES, METHOD_COLORS)):
     pred = all_preds[key]
@@ -570,9 +530,6 @@ plt.close(fig)
 print("  已保存: step14_high_hf_comparison.png")
 
 
-# ════════════════════════════════════════════════════════════════════
-# 汇总
-# ════════════════════════════════════════════════════════════════════
 print()
 print("=" * 70)
 print("全部完成！输出文件：")

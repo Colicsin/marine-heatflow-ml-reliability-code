@@ -1,26 +1,4 @@
-"""
-补充实验 W2：分组尺度稳健性与非单调性深度分析
-================================================
-审稿意见核心质疑：
-  1. 空间分组尺度的选择缺乏先验依据
-  2. 1.5°×1.5° R²(0.3461) 低于 2°×2° R²(0.4187) 的非单调现象未被解释
-  3. 5种随机种子的完整结果未纳入正文
-
-本实验设计：
-  Part A: 多种子×多尺度完整结果表（含均值±标准差）
-  Part B: 不同尺度下训练/测试集的样本量、空间覆盖、构造背景分布差异分析
-  Part C: 非单调性归因 — 量化测试集构成差异对R²的影响
-  Part D: "任何合理空间分组都显著降低R²"的稳健性论证
-
-输出：
-  CSV:  outputs/step17_W2_block_full_results.csv
-  CSV:  outputs/step17_W2_block_composition_analysis.csv
-  图1:  step17_W2_r2_by_blocksize_seeds.png
-  图2:  step17_W2_composition_analysis.png
-  图3:  step17_W2_random_vs_spatial_all.png
-
-运行时间: 约3-5分钟
-"""
+"""Analyze spatial-block robustness across scales and random seeds."""
 
 from pathlib import Path
 import numpy as np
@@ -61,11 +39,8 @@ SEEDS = [42, 123, 456, 789, 2024]
 BLOCK_SIZES = [1.0, 1.5, 2.0, 3.0, 4.0]
 
 
-# ════════════════════════════════════════════════════════════════════
-# 工具函数
-# ════════════════════════════════════════════════════════════════════
 def spatial_block_split(data, block_size, seed, min_per_block=3):
-    """空间分组划分，返回 (train, test, metadata_dict)"""
+    """Split samples by spatial blocks and return split metadata."""
     d = data.copy()
     d["block_id"] = (
         (d["grid_lat"] // block_size * block_size).astype(str) + "_" +
@@ -117,7 +92,7 @@ def calc_moran_knn(coords, values, k=8):
 
 
 def basin_distribution(data):
-    """返回各洋盆样本占比"""
+    """Return basin-level sample proportions."""
     if "basin" not in data.columns:
         return {}
     counts = data["basin"].value_counts(normalize=True)
@@ -125,7 +100,7 @@ def basin_distribution(data):
 
 
 def heatflow_stats(data):
-    """返回热流值统计"""
+    """Return summary statistics for heat-flow values."""
     q = data[TARGET]
     return {
         "q_mean":   float(q.mean()),
@@ -133,13 +108,10 @@ def heatflow_stats(data):
         "q_std":    float(q.std()),
         "q_p10":    float(q.quantile(0.1)),
         "q_p90":    float(q.quantile(0.9)),
-        "pct_high": float((q > 100).mean() * 100),  # 高热流占比
+        "pct_high": float((q > 100).mean() * 100),
     }
 
 
-# ════════════════════════════════════════════════════════════════════
-# 阶段0：数据准备
-# ════════════════════════════════════════════════════════════════════
 print("=" * 72)
 print("W2 补充实验：分组尺度稳健性与非单调性深度分析")
 print("=" * 72)
@@ -149,16 +121,13 @@ df = df[df[TARGET] > 0].copy()
 print(f"  观测数据: {len(df):,} 条\n")
 
 
-# ════════════════════════════════════════════════════════════════════
-# Part A: 多种子×多尺度完整结果
-# ════════════════════════════════════════════════════════════════════
 print("=" * 72)
 print("Part A: 多种子 × 多尺度完整实验（含随机划分基线）")
 print("=" * 72)
 
 all_results = []
 
-# ── 随机划分基线（多种子）──
+
 print("\n--- 随机划分基线 ---")
 for seed in SEEDS:
     X = df[FEATURE_COLS].values
@@ -186,9 +155,9 @@ for seed in SEEDS:
     print(f"  random seed={seed:>4}: n_test={len(X_te):>6,}  "
           f"R²={m['R2']:.4f}  RMSE={m['RMSE']:.2f}  Moran_I={moran_i:.4f}")
 
-# ── 空间分组（多种子×多尺度）──
+
 print("\n--- 空间分组实验 ---")
-composition_data = []  # 用于 Part B 分析
+composition_data = []
 
 for bs in BLOCK_SIZES:
     print(f"\n  === {bs}°×{bs}° ===")
@@ -214,7 +183,7 @@ for bs in BLOCK_SIZES:
                **m, "Moran_I": moran_i}
         all_results.append(row)
 
-        # 收集构成分析数据
+
         tr_basin = basin_distribution(tr)
         te_basin = basin_distribution(te)
         tr_hf = heatflow_stats(tr)
@@ -237,20 +206,17 @@ for bs in BLOCK_SIZES:
               f"dropped={meta['n_dropped_samples']:>5,}  "
               f"R²={m['R2']:.4f}  RMSE={m['RMSE']:.2f}  Moran_I={moran_i:.4f}")
 
-# 保存完整结果
+
 res_df = pd.DataFrame(all_results)
 res_df.to_csv(OUT_DIR / "step17_W2_block_full_results.csv", index=False)
 print(f"\n已保存: outputs/step17_W2_block_full_results.csv")
 
-# 保存构成分析
+
 comp_df = pd.DataFrame(composition_data)
 comp_df.to_csv(OUT_DIR / "step17_W2_block_composition_analysis.csv", index=False)
 print(f"已保存: outputs/step17_W2_block_composition_analysis.csv")
 
 
-# ════════════════════════════════════════════════════════════════════
-# Part B: 汇总统计 — 均值±标准差
-# ════════════════════════════════════════════════════════════════════
 print("\n" + "=" * 72)
 print("Part B: 各尺度汇总统计（均值 ± 标准差）")
 print("=" * 72)
@@ -260,7 +226,7 @@ print(f"\n{'尺度':<12} {'R² mean':>10} {'R² std':>10} {'RMSE mean':>12} "
       f"{'n_dropped':>12}")
 print("-" * 100)
 
-# 随机划分
+
 sub_rand = res_df[res_df["block_size"] == "random"]
 print(f"{'random':<12} {sub_rand['R2'].mean():>10.4f} "
       f"{sub_rand['R2'].std():>10.4f} "
@@ -270,7 +236,7 @@ print(f"{'random':<12} {sub_rand['R2'].mean():>10.4f} "
       f"{sub_rand['n_test'].mean():>12.0f} "
       f"{'0':>12}")
 
-# 各空间分组尺度
+
 summary_rows = []
 for bs in BLOCK_SIZES:
     sub = res_df[res_df["block_size"] == bs]
@@ -296,7 +262,7 @@ for bs in BLOCK_SIZES:
           f"{row['n_test_mean']:>12.0f} "
           f"{row['n_dropped_mean']:>12.0f}")
 
-# 随机划分 vs 所有空间分组的 ΔR²
+
 r2_random_mean = sub_rand["R2"].mean()
 print(f"\n随机划分 R² 均值 = {r2_random_mean:.4f}")
 print("各空间分组 ΔR²（随机 - 空间）:")
@@ -309,9 +275,6 @@ for bs in BLOCK_SIZES:
           f"(相对下降 {delta / r2_random_mean * 100:.1f}%)")
 
 
-# ════════════════════════════════════════════════════════════════════
-# Part C: 非单调性归因分析
-# ════════════════════════════════════════════════════════════════════
 print("\n" + "=" * 72)
 print("Part C: 非单调性归因 — 测试集构成差异分析")
 print("=" * 72)
@@ -338,7 +301,7 @@ if len(comp_df) > 0:
               f"{r['test_pct_high']:>8.1f} "
               f"{r['R2']:>8.4f}")
 
-    # 跨种子的测试集构成变异
+
     print("\n各尺度下测试集构成的跨种子变异:")
     print(f"{'尺度':<10} {'n_test CV%':>12} {'q_mean CV%':>12} "
           f"{'Pac% range':>12} {'high% range':>12}")
@@ -354,7 +317,7 @@ if len(comp_df) > 0:
         print(f"{bs}°×{bs}°{'':<4} {n_cv:>12.1f} {q_cv:>12.1f} "
               f"{pac_range:>12.1f} {high_range:>12.1f}")
 
-    # 非单调性解释
+
     print("\n非单调性解释:")
     for bs_a, bs_b in [(1.5, 2.0)]:
         sub_a = comp_df[comp_df["block_size"] == bs_a]
@@ -374,18 +337,15 @@ if len(comp_df) > 0:
               f"被剔除后测试集构成发生偏移")
 
 
-# ════════════════════════════════════════════════════════════════════
-# Part D: 可视化
-# ════════════════════════════════════════════════════════════════════
 print("\n" + "=" * 72)
 print("Part D: 可视化")
 print("=" * 72)
 
-# ── 图1：R² by block size (box plot + individual seeds) ──
+
 print("绘制图1：R² 分布箱线图...")
 fig, axes = plt.subplots(1, 2, figsize=(16, 6))
 
-# 左图：R² 箱线图
+
 ax = axes[0]
 positions = list(range(len(BLOCK_SIZES) + 1))
 labels_x = ["Random"] + [f"{bs}°" for bs in BLOCK_SIZES]
@@ -403,7 +363,7 @@ for patch, color in zip(bp["boxes"], colors):
     patch.set_facecolor(color)
     patch.set_alpha(0.7)
 
-# 叠加散点
+
 for pos, data_arr, color in zip(positions, bp_data, colors):
     if len(data_arr) > 0:
         jitter = np.random.default_rng(0).uniform(-0.12, 0.12, len(data_arr))
@@ -419,7 +379,7 @@ ax.spines[["top", "right"]].set_visible(False)
 ax.axhline(sub_rand["R2"].mean(), color="#8da0cb", linewidth=1,
            linestyle="--", alpha=0.5)
 
-# 右图：ΔR² (random - spatial)
+
 ax = axes[1]
 delta_means = []
 delta_stds = []
@@ -451,12 +411,12 @@ fig.savefig(FIG_DIR / "step17_W2_r2_by_blocksize_seeds.png",
 plt.close(fig)
 print("  已保存: step17_W2_r2_by_blocksize_seeds.png")
 
-# ── 图2：测试集构成分析 ──
+
 print("绘制图2：测试集构成分析...")
 fig, axes = plt.subplots(2, 2, figsize=(14, 10))
 
 if len(comp_df) > 0:
-    # (0,0) 样本量 vs R²
+
     ax = axes[0, 0]
     for bs in BLOCK_SIZES:
         sub = comp_df[comp_df["block_size"] == bs]
@@ -468,7 +428,7 @@ if len(comp_df) > 0:
     ax.legend(fontsize=9)
     ax.spines[["top", "right"]].set_visible(False)
 
-    # (0,1) 剔除样本数 vs R²
+
     ax = axes[0, 1]
     for bs in BLOCK_SIZES:
         sub = comp_df[comp_df["block_size"] == bs]
@@ -480,7 +440,7 @@ if len(comp_df) > 0:
     ax.legend(fontsize=9)
     ax.spines[["top", "right"]].set_visible(False)
 
-    # (1,0) 测试集高热流占比 vs R²
+
     ax = axes[1, 0]
     for bs in BLOCK_SIZES:
         sub = comp_df[comp_df["block_size"] == bs]
@@ -493,7 +453,7 @@ if len(comp_df) > 0:
     ax.legend(fontsize=9)
     ax.spines[["top", "right"]].set_visible(False)
 
-    # (1,1) 测试集热流均值 vs R²
+
     ax = axes[1, 1]
     for bs in BLOCK_SIZES:
         sub = comp_df[comp_df["block_size"] == bs]
@@ -513,11 +473,11 @@ fig.savefig(FIG_DIR / "step17_W2_composition_analysis.png",
 plt.close(fig)
 print("  已保存: step17_W2_composition_analysis.png")
 
-# ── 图3：随机 vs 各空间分组 R² 对比（所有种子）──
+
 print("绘制图3：随机 vs 空间分组全景对比...")
 fig, ax = plt.subplots(figsize=(12, 6))
 
-# 每个种子画一条线
+
 seed_colors = {42: "#e41a1c", 123: "#377eb8", 456: "#4daf4a",
                789: "#984ea3", 2024: "#ff7f00"}
 x_labels = ["Random"] + [f"{bs}°" for bs in BLOCK_SIZES]
@@ -525,11 +485,11 @@ x_pos_line = list(range(len(x_labels)))
 
 for seed in SEEDS:
     r2_line = []
-    # 随机划分
+
     r2_rand = res_df[(res_df["block_size"] == "random") &
                      (res_df["seed"] == seed)]["R2"].values
     r2_line.append(r2_rand[0] if len(r2_rand) > 0 else np.nan)
-    # 各空间分组
+
     for bs in BLOCK_SIZES:
         r2_sp = res_df[(res_df["block_size"] == bs) &
                        (res_df["seed"] == seed)]["R2"].values
@@ -537,7 +497,7 @@ for seed in SEEDS:
     ax.plot(x_pos_line, r2_line, "o-", color=seed_colors[seed],
             linewidth=1.5, markersize=6, alpha=0.8, label=f"seed={seed}")
 
-# 均值线
+
 r2_means = [sub_rand["R2"].mean()]
 for bs in BLOCK_SIZES:
     sub = res_df[res_df["block_size"] == bs]
@@ -562,9 +522,6 @@ plt.close(fig)
 print("  已保存: step17_W2_random_vs_spatial_all.png")
 
 
-# ════════════════════════════════════════════════════════════════════
-# 汇总
-# ════════════════════════════════════════════════════════════════════
 print("\n" + "=" * 72)
 print("W2 补充实验全部完成！")
 print(f"  CSV   outputs/step17_W2_block_full_results.csv")

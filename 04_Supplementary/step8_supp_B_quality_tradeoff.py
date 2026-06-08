@@ -1,7 +1,4 @@
-"""
-补充实验 B：数据质量 vs 数据量的权衡
-目的：展示质量筛选在空间分组验证下反而有害，回应审稿人质疑
-"""
+"""Evaluate the trade-off between data quality filtering and sample size."""
 from pathlib import Path
 import numpy as np
 import pandas as pd
@@ -25,7 +22,7 @@ df = pd.read_csv(DATA_PATH).dropna(subset=FEATURE_COLS + [TARGET])
 
 def spatial_block_split(data, block_size=2.0, seed=42, min_per_block=3):
     d = data.copy()
-    d["_bid"] = ((d["grid_lat"] // block_size) * block_size).astype(str) + "_" + \
+    d["_bid"] = ((d["grid_lat"] // block_size) * block_size).astype(str) + "_" +\
                 ((d["grid_lon"] // block_size) * block_size).astype(str)
     bc = d["_bid"].value_counts()
     d = d[d["_bid"].isin(bc[bc >= min_per_block].index)]
@@ -48,7 +45,7 @@ def calc_moran_knn(coords, values, k=8):
     W = n * k
     return (n / W) * (num / np.sum(z**2))
 
-# 质量分级
+
 DATASETS = {
     "A: M1+M1x":       ["M1", "M1x"],
     "B: M1-M2(含x)":   ["M1", "M1x", "M2", "M2x"],
@@ -81,13 +78,13 @@ for ds_label, m_levels in DATASETS.items():
 
     X, y = sub[FEATURE_COLS].values, sub[TARGET].values
 
-    # 随机划分
+
     Xr, Xe, yr, ye = train_test_split(X, y, test_size=0.3, random_state=42)
     et = ExtraTreesRegressor(n_estimators=100, max_depth=20, random_state=42, n_jobs=-1)
     et.fit(Xr, yr)
     r2_rand = r2_score(ye, et.predict(Xe))
 
-    # 空间分组
+
     tr, te = spatial_block_split(sub)
     if len(te) < 30:
         print(f"{ds_label:<18} {len(sub):>8,} {n_grids:>8,} {r2_rand:>8.4f}  空间分组样本不足")
@@ -100,7 +97,7 @@ for ds_label, m_levels in DATASETS.items():
     rmse_sp = float(np.sqrt(mean_squared_error(te[TARGET].values, pred_s)))
     mae_sp = float(mean_absolute_error(te[TARGET].values, pred_s))
 
-    # Moran's I
+
     res = te[TARGET].values - pred_s
     coords = te[["grid_lat", "grid_lon"]].values
     mi = calc_moran_knn(coords, res, k=8)

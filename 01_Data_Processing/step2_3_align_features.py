@@ -1,16 +1,4 @@
-"""
-Step 2+3: 特征对齐 + 洋壳年龄提取
-
-Step 2: 从 Ocean_HeatFlow_Prediction_Data_with_Age.csv 提取13个特征（去掉热流和洋壳年龄列）
-        按坐标 join 到 obs_grid_0.5deg.csv
-
-Step 3: 从 Muller nc 文件提取洋壳年龄
-        对每个格点，在 ±0.25° 窗口内取中位数（对应0.5°格点范围）
-        无值的格点（大陆架）保留为 NaN
-
-输出：
-  data/processed/dataset_with_features.csv
-"""
+"""Align geoscientific predictors to observation grids and extract oceanic crust age."""
 
 import sys
 from pathlib import Path
@@ -40,7 +28,7 @@ FEATURE_COLS = [
     "LITH_IDW_moho",
 ]
 
-# ── Step 2: 特征对齐 ─────────────────────────────────────────────
+
 print("=" * 55)
 print("Step 2: 特征对齐")
 obs = pd.read_csv(OBS_PATH)
@@ -60,29 +48,29 @@ n_feat_missing = len(merged) - n_feat_matched
 if n_feat_missing > 0:
     print(f"  特征缺失格点: {n_feat_missing:,} (这些格点不在旧数据集覆盖范围内)")
 
-# ── Step 3: 洋壳年龄提取 ─────────────────────────────────────────
+
 print("\n" + "=" * 55)
 print("Step 3: 洋壳年龄提取 (Muller 2019, 0.1°)")
 
 f   = nc.Dataset(NC_PATH)
-nc_lon = np.array(f.variables["lon"][:])   # (3601,) -180~180
-nc_lat = np.array(f.variables["lat"][:])   # (1801,) -90~90
-nc_z   = np.array(f.variables["z"][:])     # (1801, 3601) float32, NaN=大陆
+nc_lon = np.array(f.variables["lon"][:])
+nc_lat = np.array(f.variables["lat"][:])
+nc_z   = np.array(f.variables["z"][:])
 f.close()
 
-# nc_lon 步长 0.1°，预先计算索引范围更快
-lon_step = float(nc_lon[1] - nc_lon[0])  # 0.1
-lat_step = float(nc_lat[1] - nc_lat[0])  # 0.1
-half_win = 0.25  # 0.5° 格点的半窗口
+
+lon_step = float(nc_lon[1] - nc_lon[0])
+lat_step = float(nc_lat[1] - nc_lat[0])
+half_win = 0.25
 
 def extract_age(grid_lon, grid_lat):
-    """在 ±0.25° 窗口内取洋壳年龄中位数，全NaN返回NaN"""
+    """Return median oceanic crust age within the local target-grid window."""
     lon_lo = grid_lon - half_win
     lon_hi = grid_lon + half_win
     lat_lo = grid_lat - half_win
     lat_hi = grid_lat + half_win
 
-    # 转为索引范围
+
     i_lo = max(0, int(np.floor((lat_lo - nc_lat[0]) / lat_step)))
     i_hi = min(len(nc_lat)-1, int(np.ceil((lat_hi - nc_lat[0]) / lat_step)))
     j_lo = max(0, int(np.floor((lon_lo - nc_lon[0]) / lon_step)))
@@ -111,7 +99,7 @@ age_vals = merged["oceanic_crust_age_Ma"].dropna()
 print(f"  年龄范围: {age_vals.min():.1f} ~ {age_vals.max():.1f} Ma  "
       f"中位数={age_vals.median():.1f} Ma")
 
-# ── 汇总缺失情况 ─────────────────────────────────────────────────
+
 print("\n" + "=" * 55)
 print("各特征缺失统计:")
 all_feat_cols = FEATURE_COLS + ["oceanic_crust_age_Ma"]
@@ -119,13 +107,13 @@ for col in all_feat_cols:
     n_nan = merged[col].isna().sum()
     print(f"  {col:<45} NaN={n_nan:,} ({n_nan/len(merged)*100:.1f}%)")
 
-# 完整特征的格点数（所有特征都不为NaN）
+
 complete_mask = merged[all_feat_cols].notna().all(axis=1)
 print(f"\n所有14个特征均完整的格点: {complete_mask.sum():,} / {len(merged):,}")
 print(f"至少有13个特征（允许洋壳年龄NaN）的格点: "
       f"{merged[FEATURE_COLS].notna().all(axis=1).sum():,}")
 
-# ── 保存 ─────────────────────────────────────────────────────────
+
 out_path = OUT_DIR / "dataset_with_features.csv"
 merged.to_csv(out_path, index=False)
 print(f"\n保存至: {out_path}")

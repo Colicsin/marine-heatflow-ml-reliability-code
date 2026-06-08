@@ -1,7 +1,4 @@
-"""
-补充实验 A：Kriging 插值标签 vs 真实观测标签的直接对比
-目的：证明插值标签导致性能虚高
-"""
+"""Compare Kriging-derived labels with observed labels in supplementary validation tests."""
 from pathlib import Path
 import numpy as np
 import pandas as pd
@@ -25,7 +22,7 @@ FEATURE_COLS = [
 def spatial_block_split(data, lat_col, lon_col, block_size=2.0,
                         test_ratio=0.3, seed=42, min_per_block=3):
     d = data.copy()
-    d["_bid"] = ((d[lat_col] // block_size) * block_size).astype(str) + "_" + \
+    d["_bid"] = ((d[lat_col] // block_size) * block_size).astype(str) + "_" +\
                 ((d[lon_col] // block_size) * block_size).astype(str)
     bc = d["_bid"].value_counts()
     d = d[d["_bid"].isin(bc[bc >= min_per_block].index)]
@@ -52,9 +49,7 @@ def assign_basin(lon, lat):
     if -20 <= lon <= 20: return "Atlantic"
     return "Indian"
 
-# ═══════════════════════════════════════════════════════════════════
-# 1. 准备 Kriging 标签数据集
-# ═══════════════════════════════════════════════════════════════════
+
 print("=" * 80)
 print("补充实验 A：Kriging 插值标签 vs 真实观测标签")
 print("=" * 80)
@@ -71,18 +66,14 @@ kriging["basin"] = kriging.apply(
 print(f"\nKriging 标签数据集: {len(kriging):,} 网格点")
 print(f"  q: mean={kriging['q'].mean():.1f}, std={kriging['q'].std():.1f}")
 
-# ═══════════════════════════════════════════════════════════════════
-# 2. 准备真实观测数据集
-# ═══════════════════════════════════════════════════════════════════
+
 obs = pd.read_csv(OBS_PATH)
 obs = obs.dropna(subset=FEATURE_COLS + ["q"])
 print(f"\n真实观测数据集: {len(obs):,} 条记录, "
       f"{obs[['grid_lat','grid_lon']].drop_duplicates().shape[0]:,} 网格")
 print(f"  q: mean={obs['q'].mean():.1f}, std={obs['q'].std():.1f}")
 
-# ═══════════════════════════════════════════════════════════════════
-# 3. 对比实验
-# ═══════════════════════════════════════════════════════════════════
+
 datasets = {
     "Kriging标签(123k网格)": (kriging, FEATURE_COLS, "q", "grid_lat", "grid_lon"),
     "真实观测(28k记录)":     (obs,     FEATURE_COLS, "q", "grid_lat", "grid_lon"),
@@ -98,7 +89,7 @@ for ds_name, (data, feat_cols, target, lat_col, lon_col) in datasets.items():
     print(f"数据集: {ds_name}")
     print(f"{'='*70}")
 
-    # 方案1：随机划分 7:3
+
     X_tr, X_te, y_tr, y_te = train_test_split(X, y, test_size=0.3, random_state=42)
     et = ExtraTreesRegressor(n_estimators=100, max_depth=20, random_state=42, n_jobs=-1)
     et.fit(X_tr, y_tr)
@@ -106,7 +97,7 @@ for ds_name, (data, feat_cols, target, lat_col, lon_col) in datasets.items():
     results.append((ds_name, "随机划分", len(y_te), m))
     print(f"  随机划分:     n_test={len(y_te):>7,}  R²={m['R2']:.4f}  RMSE={m['RMSE']:.2f}  MAE={m['MAE']:.2f}")
 
-    # 方案2：空间分组 2°×2°
+
     tr, te, n_blocks = spatial_block_split(data, lat_col, lon_col)
     et2 = ExtraTreesRegressor(n_estimators=100, max_depth=20, random_state=42, n_jobs=-1)
     et2.fit(tr[feat_cols].values, tr[target].values)
@@ -114,7 +105,7 @@ for ds_name, (data, feat_cols, target, lat_col, lon_col) in datasets.items():
     results.append((ds_name, "空间分组2°×2°", len(te), m2))
     print(f"  空间分组2°×2°: n_test={len(te):>7,}  R²={m2['R2']:.4f}  RMSE={m2['RMSE']:.2f}  MAE={m2['MAE']:.2f}")
 
-    # 方案3：跨洋盆
+
     for basin in ["Pacific", "Atlantic", "Indian"]:
         tr_b = data[data["basin"] != basin]
         te_b = data[data["basin"] == basin]
@@ -126,9 +117,7 @@ for ds_name, (data, feat_cols, target, lat_col, lon_col) in datasets.items():
             results.append((ds_name, f"跨盆-{basin}", len(te_b), m3))
             print(f"  跨盆-{basin:<9} n_test={len(te_b):>7,}  R²={m3['R2']:.4f}  RMSE={m3['RMSE']:.2f}  MAE={m3['MAE']:.2f}")
 
-# ═══════════════════════════════════════════════════════════════════
-# 4. 汇总对比表
-# ═══════════════════════════════════════════════════════════════════
+
 print("\n" + "=" * 90)
 print("汇总对比表：Kriging 标签 vs 真实观测")
 print("=" * 90)
@@ -138,7 +127,7 @@ for ds_name, scheme, n, m in results:
     tag = "K" if "Kriging" in ds_name else "O"
     print(f"[{tag}] {scheme:<18} {n:>8,} {m['R2']:>8.4f} {m['RMSE']:>8.2f} {m['MAE']:>8.2f} {m['Bias']:>8.2f}")
 
-# 计算差异
+
 print("\n--- R² 差异 (Kriging - 观测) ---")
 kriging_results = {r[1]: r[3] for r in results if "Kriging" in r[0]}
 obs_results = {r[1]: r[3] for r in results if "真实" in r[0]}

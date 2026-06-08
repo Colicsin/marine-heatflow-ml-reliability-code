@@ -1,7 +1,4 @@
-"""
-实验5-7：特征工程 + 特征敏感性 + 分组敏感性
-对应论文表11-14、图7、图8
-"""
+"""Evaluate feature engineering, feature sensitivity, and spatial-block sensitivity experiments."""
 from pathlib import Path
 import time
 import numpy as np
@@ -30,7 +27,7 @@ print(f"Dataset D: {len(df):,} records\n")
 
 def spatial_block_split(data, block_size=2.0, test_ratio=0.3, seed=42, min_per_block=3):
     d = data.copy()
-    d["block_id"] = ((d["grid_lat"] // block_size) * block_size).astype(str) + "_" + \
+    d["block_id"] = ((d["grid_lat"] // block_size) * block_size).astype(str) + "_" +\
                     ((d["grid_lon"] // block_size) * block_size).astype(str)
     bc = d["block_id"].value_counts()
     d = d[d["block_id"].isin(bc[bc >= min_per_block].index)]
@@ -49,21 +46,19 @@ def calc_moran_knn(coords, values, k=8):
     W = n * k
     return (n / W) * (num / np.sum(z**2))
 
-# ═══════════════════════════════════════════════════════════════════
-# 实验5：特征工程效果评估 —— 对应论文表13、图7
-# ═══════════════════════════════════════════════════════════════════
+
 print("=" * 80)
 print("实验5：特征工程效果评估 —— 对应论文表13、图7")
 print("=" * 80)
 
-# 构造交互特征
+
 df["hotspot_volcano_inter"] = df["hotspot_min_hotspot_distance_km"] / (df["volcano_latest_vocano_dist"] + EPS)
 df["mantle_volcano_inter"] = df["CRUST1.0_mantle_rho_0.5deg"] * df["volcano_latest_vocano_dist"]
 df["age_volcano_inter"] = df["oceanic_crust_age_Ma"] * df["volcano_latest_vocano_dist"]
 df["age_mantle_inter"] = df["oceanic_crust_age_Ma"] * df["CRUST1.0_mantle_rho_0.5deg"]
 df["hotspot_mantle_inter"] = df["hotspot_min_hotspot_distance_km"] * df["CRUST1.0_mantle_rho_0.5deg"]
 
-# 构造变换特征
+
 df["inv_upper_crust"] = 1.0 / (df["CRUST1.0_upper_crust_thickness_0.5deg"] + EPS)
 df["inv_moho_depth"] = 1.0 / (df["CRUST1.0_moho_depth_0.5deg"] + EPS)
 df["log_hotspot_dist"] = np.log1p(df["hotspot_min_hotspot_distance_km"])
@@ -76,7 +71,7 @@ INTER = ["hotspot_volcano_inter", "mantle_volcano_inter", "age_volcano_inter",
 TRANS = ["inv_upper_crust", "inv_moho_depth", "log_hotspot_dist",
          "log_volcano_dist", "sqrt_age", "inv_age"]
 
-# 处理 inf
+
 df = df.replace([np.inf, -np.inf], np.nan).dropna(subset=FEATURE_COLS + INTER + TRANS + [TARGET])
 
 FEAT_SETS = [
@@ -90,14 +85,14 @@ print("-" * 75)
 
 for label, feat_cols in FEAT_SETS:
     X, y = df[feat_cols].values, df[TARGET].values
-    # 随机划分
+
     from sklearn.model_selection import train_test_split
     Xr, Xe, yr, ye = train_test_split(X, y, test_size=0.3, random_state=42)
     et = ExtraTreesRegressor(n_estimators=100, max_depth=20, random_state=42, n_jobs=-1)
     et.fit(Xr, yr)
     r2_rand = r2_score(ye, et.predict(Xe))
     rmse_rand = np.sqrt(mean_squared_error(ye, et.predict(Xe)))
-    # 空间分组
+
     tr, te = spatial_block_split(df)
     et2 = ExtraTreesRegressor(n_estimators=100, max_depth=20, random_state=42, n_jobs=-1)
     et2.fit(tr[feat_cols].values, tr[TARGET].values)
@@ -106,8 +101,7 @@ for label, feat_cols in FEAT_SETS:
     rmse_sp = np.sqrt(mean_squared_error(te[TARGET].values, pred_s))
     print(f"{label:<25} {len(feat_cols):>6} {r2_rand:>8.4f} {r2_sp:>8.4f} {rmse_rand:>10.2f} {rmse_sp:>10.2f}")
 
-# D: 精简至14（基于MDI删除后6位）
-# 先用25特征训练，看MDI排序
+
 all_25 = FEATURE_COLS + INTER + TRANS
 et_full = ExtraTreesRegressor(n_estimators=100, max_depth=20, random_state=42, n_jobs=-1)
 et_full.fit(df[all_25].values, df[TARGET].values)
@@ -119,7 +113,7 @@ for rank, i in enumerate(mdi_order):
     marker = " ★" if rank < 14 else " (删除)"
     print(f"  {rank+1:>2}. {all_25[i]:<35} MDI={mdi[i]:>8.2f}{marker}")
 
-# 取 Top14
+
 top14_cols = [all_25[i] for i in mdi_order[:14]]
 Xr14, Xe14, yr14, ye14 = train_test_split(df[top14_cols].values, df[TARGET].values, test_size=0.3, random_state=42)
 et14 = ExtraTreesRegressor(n_estimators=100, max_depth=20, random_state=42, n_jobs=-1)
@@ -133,7 +127,7 @@ r2_14s = r2_score(te14[TARGET].values, et14s.predict(te14[top14_cols].values))
 rmse_14s = np.sqrt(mean_squared_error(te14[TARGET].values, et14s.predict(te14[top14_cols].values)))
 print(f"\n{'D: 精简至Top14':<25} {14:>6} {r2_14:>8.4f} {r2_14s:>8.4f} {rmse_14:>10.2f} {rmse_14s:>10.2f}")
 
-# MDI 重要性柱状图（Top14）—— 对应论文图7
+
 fig, ax = plt.subplots(figsize=(10, 6))
 top14_names = [all_25[i].split("_0.5deg")[0].split("_km")[0] for i in mdi_order[:14]]
 top14_mdi = [mdi[i] for i in mdi_order[:14]]
@@ -141,17 +135,17 @@ colors = []
 for i in mdi_order[:14]:
     name = all_25[i]
     if name in INTER:
-        colors.append("#e74c3c")  # 交互特征红色
+        colors.append("#e74c3c")
     elif name in TRANS:
-        colors.append("#2ecc71")  # 变换特征绿色
+        colors.append("#2ecc71")
     else:
-        colors.append("#3498db")  # 原始特征蓝色
+        colors.append("#3498db")
 ax.barh(range(13, -1, -1), top14_mdi, color=colors)
 ax.set_yticks(range(13, -1, -1))
 ax.set_yticklabels(top14_names, fontsize=9)
 ax.set_xlabel("MDI Importance", fontsize=12)
 ax.set_title("Top 14 Feature Importance (MDI, ExtraTrees)", fontsize=13)
-# 图例
+
 from matplotlib.patches import Patch
 legend_elements = [Patch(facecolor="#3498db", label="Original"),
                    Patch(facecolor="#e74c3c", label="Interaction"),
@@ -162,14 +156,12 @@ fig.savefig(FIG_DIR / "step7_mdi_top14.png", dpi=300, bbox_inches="tight")
 plt.close()
 print(f"\n图已保存: {FIG_DIR / 'step7_mdi_top14.png'}")
 
-# ═══════════════════════════════════════════════════════════════════
-# 实验6：特征参数敏感性 —— 对应论文图8
-# ═══════════════════════════════════════════════════════════════════
+
 print("\n" + "=" * 80)
 print("实验6：特征参数敏感性 —— 对应论文图8")
 print("=" * 80)
 
-# 用空间分组验证，对每个特征加噪声看R²下降
+
 tr_s, te_s = spatial_block_split(df)
 et_base = ExtraTreesRegressor(n_estimators=100, max_depth=20, random_state=42, n_jobs=-1)
 et_base.fit(tr_s[FEATURE_COLS].values, tr_s[TARGET].values)
@@ -208,7 +200,7 @@ for fi, feat in enumerate(FEATURE_COLS):
         print(f"  {drop:>11.2f}%", end="")
     print()
 
-# 敏感性柱状图 —— 对应论文图8
+
 fig, ax = plt.subplots(figsize=(12, 6))
 x = np.arange(len(FEATURE_COLS))
 width = 0.25
@@ -225,9 +217,7 @@ fig.savefig(FIG_DIR / "step7_feature_sensitivity.png", dpi=300, bbox_inches="tig
 plt.close()
 print(f"\n图已保存: {FIG_DIR / 'step7_feature_sensitivity.png'}")
 
-# ═══════════════════════════════════════════════════════════════════
-# 实验7：分组参数敏感性 —— 对应论文表14
-# ═══════════════════════════════════════════════════════════════════
+
 print("\n" + "=" * 80)
 print("实验7：分组参数敏感性 —— 对应论文表14")
 print("=" * 80)

@@ -1,19 +1,4 @@
-"""
-实验：ExtraTrees 预测不确定性估计
-原理：ExtraTrees 由多棵决策树组成，对同一输入各棵树给出不同预测值。
-      用各棵树预测值的标准差作为不确定性（epistemic uncertainty）。
-
-输出：
-  CSV:
-    outputs/step13_test_uncertainty.csv        — 测试集预测值 + 不确定性
-    outputs/step13_global_uncertainty.csv      — 全球网格预测值 + 不确定性
-  图:
-    outputs/figures/step13_uncertainty_map.png         — 全球不确定性空间分布
-    outputs/figures/step13_test_uncertainty_map.png    — 测试集不确定性空间分布
-    outputs/figures/step13_uncertainty_vs_error.png    — 不确定性 vs 实际误差关系
-    outputs/figures/step13_calibration.png             — 不确定性校准曲线
-    outputs/figures/step13_basin_uncertainty.png       — 各洋盆不确定性分布
-"""
+"""Estimate prediction uncertainty from tree-level ExtraTrees ensemble variability."""
 
 from pathlib import Path
 import numpy as np
@@ -52,12 +37,10 @@ FEATURE_COLS = [
 ]
 TARGET = "q"
 
-# ════════════════════════════════════════════════════════════════════
-# 工具函数
-# ════════════════════════════════════════════════════════════════════
+
 def spatial_block_split(data, block_size=2.0, test_ratio=0.3, seed=42, min_per_block=3):
     d = data.copy()
-    d["block_id"] = ((d["grid_lat"] // block_size) * block_size).astype(str) + "_" + \
+    d["block_id"] = ((d["grid_lat"] // block_size) * block_size).astype(str) + "_" +\
                     ((d["grid_lon"] // block_size) * block_size).astype(str)
     bc = d["block_id"].value_counts()
     d = d[d["block_id"].isin(bc[bc >= min_per_block].index)]
@@ -71,11 +54,8 @@ def spatial_block_split(data, block_size=2.0, test_ratio=0.3, seed=42, min_per_b
     return tr, te
 
 def predict_with_uncertainty(model, X):
-    """
-    用各棵树的预测值计算均值和标准差。
-    返回: mean_pred, std_pred (shape: [n_samples])
-    """
-    # shape: (n_estimators, n_samples)
+    """Return ensemble mean and standard deviation across ExtraTrees members."""
+
     tree_preds = np.array([tree.predict(X) for tree in model.estimators_])
     mean_pred = tree_preds.mean(axis=0)
     std_pred  = tree_preds.std(axis=0)
@@ -89,9 +69,7 @@ def base_map(ax, title, fontsize=12):
     ax.gridlines(draw_labels=False, linewidth=0.3, color="gray", alpha=0.4, linestyle="--")
     ax.set_title(title, fontsize=fontsize, fontweight="bold", pad=8)
 
-# ════════════════════════════════════════════════════════════════════
-# 1. 加载数据，划分训练/测试集
-# ════════════════════════════════════════════════════════════════════
+
 print("=" * 65)
 print("加载数据...")
 df = pd.read_csv(DATA_PATH).dropna(subset=FEATURE_COLS + [TARGET])
@@ -104,9 +82,7 @@ X_train = train_df[FEATURE_COLS].values
 X_test  = test_df[FEATURE_COLS].values
 y_test  = test_df[TARGET].values
 
-# ════════════════════════════════════════════════════════════════════
-# 2. 训练模型（n_estimators=300，树越多不确定性估计越稳定）
-# ════════════════════════════════════════════════════════════════════
+
 print("\n训练 ExtraTrees（n_estimators=300）...")
 model_cv = ExtraTreesRegressor(n_estimators=300, max_depth=20, random_state=42, n_jobs=-1)
 model_cv.fit(X_train, train_df[TARGET].values)
@@ -114,7 +90,7 @@ model_cv.fit(X_train, train_df[TARGET].values)
 print("计算测试集预测均值和不确定性...")
 mean_pred, std_pred = predict_with_uncertainty(model_cv, X_test)
 
-# 基础指标
+
 r2   = r2_score(y_test, mean_pred)
 rmse = float(np.sqrt(mean_squared_error(y_test, mean_pred)))
 mae  = float(mean_absolute_error(y_test, mean_pred))
@@ -124,7 +100,7 @@ print(f"  测试集: R²={r2:.4f}  RMSE={rmse:.2f}  MAE={mae:.2f}  Bias={bias:.2
 print(f"  不确定性(std): 均值={std_pred.mean():.2f}  中位数={np.median(std_pred):.2f}  "
       f"P95={np.percentile(std_pred, 95):.2f} mW/m²")
 
-# 保存测试集结果
+
 test_out = test_df[["lat_NS", "long_EW", "grid_lat", "grid_lon", "basin", TARGET]].copy()
 test_out["q_pred"]       = mean_pred
 test_out["q_uncertainty"] = std_pred
@@ -133,9 +109,7 @@ test_out["residual"]     = mean_pred - y_test
 test_out.to_csv(OUT_DIR / "step13_test_uncertainty.csv", index=False)
 print(f"  已保存: outputs/step13_test_uncertainty.csv")
 
-# ════════════════════════════════════════════════════════════════════
-# 3. 全量训练 → 全球网格不确定性
-# ════════════════════════════════════════════════════════════════════
+
 print("\n全量训练（全部数据）...")
 model_full = ExtraTreesRegressor(n_estimators=300, max_depth=20, random_state=42, n_jobs=-1)
 model_full.fit(df[FEATURE_COLS].values, df[TARGET].values)
@@ -153,15 +127,13 @@ globe_out.to_csv(OUT_DIR / "step13_global_uncertainty.csv", index=False)
 print(f"  已保存: outputs/step13_global_uncertainty.csv")
 print(f"  全球不确定性: 均值={globe_std.mean():.2f}  P95={np.percentile(globe_std, 95):.2f} mW/m²")
 
-# ════════════════════════════════════════════════════════════════════
-# 图1：全球不确定性空间分布
-# ════════════════════════════════════════════════════════════════════
+
 print("\n绘制图1：全球不确定性空间分布...")
 
 fig, axes = plt.subplots(2, 1, figsize=(18, 14),
                          subplot_kw={"projection": ccrs.Robinson()})
 
-# 上图：预测值
+
 base_map(axes[0], f"Global Ocean Heat Flow Prediction (ExtraTrees, n={len(globe_out):,})")
 norm_hf = mcolors.Normalize(vmin=20, vmax=180)
 sc0 = axes[0].scatter(
@@ -174,7 +146,7 @@ cb0 = plt.colorbar(sc0, ax=axes[0], orientation="horizontal",
                    pad=0.04, fraction=0.025, aspect=50, extend="both")
 cb0.set_label("Predicted Heat Flow (mW/m²)", fontsize=11)
 
-# 下图：不确定性
+
 base_map(axes[1], f"Prediction Uncertainty (1σ, Tree Ensemble Std)\n"
                   f"Mean={globe_std.mean():.1f}  P95={np.percentile(globe_std,95):.1f} mW/m²")
 norm_unc = mcolors.Normalize(vmin=0, vmax=np.percentile(globe_std, 95))
@@ -193,9 +165,7 @@ fig.savefig(FIG_DIR / "step13_uncertainty_map.png", dpi=200, bbox_inches="tight"
 plt.close(fig)
 print("  已保存: step13_uncertainty_map.png")
 
-# ════════════════════════════════════════════════════════════════════
-# 图2：测试集不确定性空间分布
-# ════════════════════════════════════════════════════════════════════
+
 print("绘制图2：测试集不确定性空间分布...")
 
 fig, ax = plt.subplots(figsize=(16, 8),
@@ -219,14 +189,12 @@ fig.savefig(FIG_DIR / "step13_test_uncertainty_map.png", dpi=200, bbox_inches="t
 plt.close(fig)
 print("  已保存: step13_test_uncertainty_map.png")
 
-# ════════════════════════════════════════════════════════════════════
-# 图3：不确定性 vs 实际误差关系
-# ════════════════════════════════════════════════════════════════════
+
 print("绘制图3：不确定性 vs 实际误差...")
 
 fig, axes = plt.subplots(1, 2, figsize=(13, 5))
 
-# 左：散点图
+
 ax = axes[0]
 basin_colors = {"Pacific": "#3a7ebf", "Atlantic": "#e06c3a", "Indian": "#4caf7d"}
 for basin, color in basin_colors.items():
@@ -234,7 +202,7 @@ for basin, color in basin_colors.items():
     ax.scatter(std_pred[mask], abs_error[mask],
                c=color, s=3, alpha=0.35, linewidths=0, label=basin)
 
-# 分箱均值趋势线
+
 bins_unc = np.percentile(std_pred, np.linspace(0, 100, 21))
 bin_centers, bin_means = [], []
 for lo, hi in zip(bins_unc[:-1], bins_unc[1:]):
@@ -252,9 +220,9 @@ ax.set_title("Uncertainty vs Actual Error\n(higher σ → higher error = well-ca
 ax.legend(fontsize=9, markerscale=2)
 ax.spines[["top", "right"]].set_visible(False)
 
-# 右：不确定性分位数 vs 误差覆盖率（校准曲线）
+
 ax = axes[1]
-# 理想校准：预测区间 [pred ± k*σ] 应覆盖 ~68% (k=1), ~95% (k=2) 的真实值
+
 k_values = np.linspace(0.1, 3.0, 30)
 coverage = []
 for k in k_values:
@@ -263,7 +231,7 @@ for k in k_values:
     covered = ((y_test >= lower) & (y_test <= upper)).mean()
     coverage.append(covered)
 
-# 理想高斯校准曲线
+
 from scipy import stats as scipy_stats
 ideal_coverage = [2 * scipy_stats.norm.cdf(k) - 1 for k in k_values]
 
@@ -282,7 +250,7 @@ ax.legend(fontsize=9)
 ax.set_xlim(0, 3.1); ax.set_ylim(0, 1.05)
 ax.spines[["top", "right"]].set_visible(False)
 
-# 打印关键覆盖率
+
 for k_target in [1.0, 1.645, 2.0]:
     idx = np.argmin(np.abs(k_values - k_target))
     print(f"  k={k_target:.3f}: 实际覆盖率={coverage[idx]:.3f}  理想={ideal_coverage[idx]:.3f}")
@@ -293,9 +261,7 @@ fig.savefig(FIG_DIR / "step13_uncertainty_vs_error.png", dpi=200, bbox_inches="t
 plt.close(fig)
 print("  已保存: step13_uncertainty_vs_error.png")
 
-# ════════════════════════════════════════════════════════════════════
-# 图4：各洋盆不确定性分布
-# ════════════════════════════════════════════════════════════════════
+
 print("绘制图4：各洋盆不确定性分布...")
 
 basins = ["Pacific", "Atlantic", "Indian"]
@@ -333,9 +299,7 @@ fig.savefig(FIG_DIR / "step13_basin_uncertainty.png", dpi=200, bbox_inches="tigh
 plt.close(fig)
 print("  已保存: step13_basin_uncertainty.png")
 
-# ════════════════════════════════════════════════════════════════════
-# 汇总
-# ════════════════════════════════════════════════════════════════════
+
 print()
 print("=" * 65)
 print("全部完成！输出文件：")

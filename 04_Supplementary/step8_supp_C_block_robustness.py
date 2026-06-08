@@ -1,7 +1,4 @@
-"""
-补充实验 C：分组尺度稳健性检验（多种子）
-目的：检验分组敏感性结论的稳健性，解释 1.5° 非单调现象
-"""
+"""Test robustness of spatial-block scale choices across random seeds."""
 from pathlib import Path
 import numpy as np
 import pandas as pd
@@ -26,7 +23,7 @@ print(f"Dataset D: {len(df):,} records\n")
 
 def spatial_block_split(data, block_size, seed, min_per_block=3):
     d = data.copy()
-    d["_bid"] = ((d["grid_lat"] // block_size) * block_size).astype(str) + "_" + \
+    d["_bid"] = ((d["grid_lat"] // block_size) * block_size).astype(str) + "_" +\
                 ((d["grid_lon"] // block_size) * block_size).astype(str)
     bc = d["_bid"].value_counts()
     d = d[d["_bid"].isin(bc[bc >= min_per_block].index)]
@@ -46,7 +43,7 @@ print("=" * 80)
 print("补充实验 C：分组尺度稳健性检验（5 种子 × 4 尺度）")
 print("=" * 80)
 
-# 逐个跑
+
 all_results = []
 for bs in BLOCK_SIZES:
     for seed in SEEDS:
@@ -68,7 +65,7 @@ for bs in BLOCK_SIZES:
         print(f"  {bs}°×{bs}° seed={seed:>4}: n_test={len(te):>6,}  "
               f"R²={r2:.4f}  RMSE={rmse:.2f}")
 
-# 汇总统计
+
 print("\n" + "=" * 80)
 print("汇总：各尺度的均值 ± 标准差（5 种子）")
 print("=" * 80)
@@ -83,7 +80,7 @@ for bs in BLOCK_SIZES:
     print(f"{bs}°×{bs}°{'':<6} {sub['R2'].mean():>10.4f} {sub['R2'].std():>10.4f} "
           f"{sub['RMSE'].mean():>12.2f} {sub['RMSE'].std():>10.2f} {sub['MAE'].mean():>10.2f}")
 
-# 详细表格
+
 print("\n--- 完整结果 ---")
 print(f"{'尺度':<8} {'seed':>6} {'n_train':>8} {'n_test':>8} {'R²':>8} {'RMSE':>8} {'MAE':>8}")
 print("-" * 58)

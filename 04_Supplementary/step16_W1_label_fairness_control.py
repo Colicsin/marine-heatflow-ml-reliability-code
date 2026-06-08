@@ -1,31 +1,4 @@
-"""
-补充实验 W1：标签对比公平性控制实验
-====================================
-审稿意见核心质疑：
-  原始实验中方案A/C的训练集覆盖全球网格（含无观测区域的插值值），
-  而方案B仅使用28,642条真实观测。三种方案的训练样本在数量、空间覆盖
-  和信息量上存在本质差异，性能差异可能部分来自样本分布不匹配。
-
-控制实验设计：
-  将方案A和方案C的训练集限制在与方案B完全相同的观测点位置，
-  仅将标签值替换为对应位置的Kriging插值值。
-  这样三种方案的训练样本在空间分布上完全一致，
-  性能差异即可归因于标签质量本身。
-
-方案：
-  B:  真实观测标签（基线，与原实验一致）
-  A': 同位置全局Kriging标签（控制组）
-  C': 同位置局部Kriging标签（控制组）
-
-输出：
-  CSV:  outputs/step16_W1_fairness_summary.csv
-  图1:  step16_W1_scatter_controlled.png
-  图2:  step16_W1_residual_hist_controlled.png
-  图3:  step16_W1_bar_comparison.png  (原始 vs 控制)
-
-依赖: pip install pykrige
-运行时间: 约30-60分钟（局部Kriging是瓶颈）
-"""
+"""Run controlled label-fairness experiments using matched observation locations."""
 
 from pathlib import Path
 import time
@@ -64,9 +37,6 @@ FEATURE_COLS = [
 TARGET = "q"
 
 
-# ════════════════════════════════════════════════════════════════════
-# 工具函数（与 step14 保持一致）
-# ════════════════════════════════════════════════════════════════════
 def spatial_block_split(data, block_size=2.0, test_ratio=0.3, seed=42,
                         min_per_block=3):
     d = data.copy()
@@ -106,9 +76,6 @@ def calc_moran_knn(coords, values, k=8):
     return float((n / W) * (num / np.sum(z ** 2)))
 
 
-# ════════════════════════════════════════════════════════════════════
-# 阶段0：数据准备
-# ════════════════════════════════════════════════════════════════════
 print("=" * 72)
 print("W1 控制实验：标签对比公平性验证")
 print("=" * 72)
@@ -117,7 +84,7 @@ df = pd.read_csv(DATA_PATH).dropna(subset=FEATURE_COLS + [TARGET])
 df = df[df[TARGET] > 0].copy()
 print(f"  观测数据: {len(df):,} 条")
 
-# 空间分组划分（与原实验完全一致）
+
 train_df, test_df = spatial_block_split(df)
 print(f"  训练集: {len(train_df):,}  测试集: {len(test_df):,}")
 
@@ -125,12 +92,12 @@ X_test = test_df[FEATURE_COLS].values
 y_test = test_df[TARGET].values
 coords_test = test_df[["grid_lat", "grid_lon"]].values
 
-# 训练集观测点坐标（用于 Kriging）
+
 train_lon = train_df["long_EW"].values
 train_lat = train_df["lat_NS"].values
 train_q   = train_df[TARGET].values
 
-# 训练集网格级中位数（用于全局 Kriging 拟合，与 step14 一致）
+
 train_grid = (train_df.groupby(["grid_lat", "grid_lon"])[TARGET]
               .median().reset_index())
 
@@ -138,9 +105,6 @@ all_preds   = {}
 all_metrics = {}
 
 
-# ════════════════════════════════════════════════════════════════════
-# 阶段1：方案B — 真实观测直接预测（基线，与原实验一致）
-# ════════════════════════════════════════════════════════════════════
 print("\n" + "=" * 72)
 print("阶段1：方案B — 真实观测直接预测（基线）")
 print("=" * 72)
@@ -161,9 +125,6 @@ print(f"  测试集: R²={all_metrics['B']['R2']:.4f}  "
       f"Bias={all_metrics['B']['Bias']:.2f}")
 
 
-# ════════════════════════════════════════════════════════════════════
-# 阶段2：方案A' — 同位置全局Kriging标签（控制组）
-# ════════════════════════════════════════════════════════════════════
 print("\n" + "=" * 72)
 print("阶段2：方案A' — 同位置全局Kriging标签（控制组）")
 print("  关键区别：训练样本位置与方案B完全一致，仅替换标签")
@@ -171,7 +132,7 @@ print("=" * 72)
 
 from pykrige.ok import OrdinaryKriging
 
-# 用训练集网格中位数拟合全局 Kriging（与 step14 一致）
+
 print(f"  Kriging 拟合输入点数: {len(train_grid):,}（训练集网格中位数）")
 
 t0 = time.time()
@@ -185,7 +146,7 @@ ok_global = OrdinaryKriging(
     nlags=20,
 )
 
-# ── 关键控制：在训练集观测点位置执行 Kriging，而非全球网格 ──
+
 print("  在训练集观测点位置执行 Kriging 插值（n_closest_points=50）...")
 z_train_A, _ = ok_global.execute(
     "points",
@@ -196,20 +157,20 @@ z_train_A, _ = ok_global.execute(
 )
 z_train_A = np.asarray(z_train_A).ravel()
 
-# 过滤不合理值
+
 bad_A = ~np.isfinite(z_train_A) | (z_train_A < 0) | (z_train_A > 500)
 n_bad_A = bad_A.sum()
 print(f"  Kriging 完成: {time.time()-t0:.1f}s  "
       f"不合理值: {n_bad_A:,}/{len(z_train_A):,}")
 
-# 对不合理值用真实观测替代（保持样本量一致）
+
 z_train_A[bad_A] = train_q[bad_A]
 print(f"  方案A'训练集: {len(z_train_A):,} 条（同位置Kriging标签）")
 
-# 用同位置 Kriging 标签训练 ExtraTrees
+
 model_A_ctrl = ExtraTreesRegressor(n_estimators=200, max_depth=20,
                                     random_state=42, n_jobs=-1)
-model_A_ctrl.fit(X_train_B, z_train_A)  # 特征与方案B完全一致
+model_A_ctrl.fit(X_train_B, z_train_A)
 pred_A_ctrl = model_A_ctrl.predict(X_test)
 all_preds["A'"] = pred_A_ctrl
 all_metrics["A'"] = calc_metrics(y_test, pred_A_ctrl)
@@ -220,9 +181,6 @@ print(f"  测试集: R²={m_Ac['R2']:.4f}  "
       f"Bias={m_Ac['Bias']:.2f}")
 
 
-# ════════════════════════════════════════════════════════════════════
-# 阶段3：方案C' — 同位置局部Kriging标签（控制组）
-# ════════════════════════════════════════════════════════════════════
 print("\n" + "=" * 72)
 print("阶段3：方案C' — 同位置局部Kriging标签（控制组）")
 print("  关键区别：训练样本位置与方案B完全一致，仅替换标签")
@@ -233,8 +191,7 @@ N_MIN      = 5
 D_MAX_KM   = 500.0
 HALF_W     = WINDOW_DEG / 2.0
 
-# 在训练集观测点位置执行局部 Kriging
-# 注意：对每个训练点，用其周围的其他训练点做局部 Kriging 预测
+
 z_train_C = np.full(len(train_df), np.nan)
 
 t0 = time.time()
@@ -245,16 +202,16 @@ for i in range(len(train_df)):
     pt_lon = train_lon[i]
     pt_lat = train_lat[i]
 
-    # 矩形窗口内的其他训练点（排除自身，避免自预测）
+
     lon_mask = (train_lon >= pt_lon - HALF_W) & (train_lon <= pt_lon + HALF_W)
     lat_mask = (train_lat >= pt_lat - HALF_W) & (train_lat <= pt_lat + HALF_W)
     local_mask = lon_mask & lat_mask
-    # 排除自身
+
     local_mask[i] = False
     n_local = local_mask.sum()
 
     if n_local < N_MIN:
-        # 邻近点不足，回退到真实观测值
+
         z_train_C[i] = train_q[i]
         n_fallback += 1
         n_done += 1
@@ -300,10 +257,10 @@ print(f"  局部Kriging完成: {time.time()-t0:.1f}s  "
       f"回退到真实值: {n_fallback:,}/{len(train_df):,}")
 print(f"  方案C'训练集: {len(z_train_C):,} 条（同位置局部Kriging标签）")
 
-# 用同位置局部 Kriging 标签训练 ExtraTrees
+
 model_C_ctrl = ExtraTreesRegressor(n_estimators=200, max_depth=20,
                                     random_state=42, n_jobs=-1)
-model_C_ctrl.fit(X_train_B, z_train_C)  # 特征与方案B完全一致
+model_C_ctrl.fit(X_train_B, z_train_C)
 pred_C_ctrl = model_C_ctrl.predict(X_test)
 all_preds["C'"] = pred_C_ctrl
 all_metrics["C'"] = calc_metrics(y_test, pred_C_ctrl)
@@ -314,36 +271,33 @@ print(f"  测试集: R²={m_Cc['R2']:.4f}  "
       f"Bias={m_Cc['Bias']:.2f}")
 
 
-# ════════════════════════════════════════════════════════════════════
-# 阶段4：统一评估与对比
-# ════════════════════════════════════════════════════════════════════
 print("\n" + "=" * 72)
 print("阶段4：统一评估与对比")
 print("=" * 72)
 
-# 原始实验结果（来自 step14，硬编码用于对比）
+
 ORIGINAL = {
     "A": {"R2": 0.2885, "RMSE": 43.70, "MAE": 33.41, "Bias": np.nan},
     "B": {"R2": 0.4160, "RMSE": 39.60, "MAE": 28.21, "Bias": np.nan},
     "C": {"R2": 0.2796, "RMSE": 43.98, "MAE": 32.96, "Bias": np.nan},
 }
 
-# Moran's I
+
 moran_vals = {}
 for key in ["B", "A'", "C'"]:
     residuals = all_preds[key] - y_test
     moran_vals[key] = calc_moran_knn(coords_test, residuals, k=8)
 
-# 标签与真实值的偏差统计
+
 label_stats = {}
-# A': Kriging标签 vs 真实观测
+
 diff_A = z_train_A - train_q
 label_stats["A'"] = {
     "label_bias": float(np.mean(diff_A)),
     "label_mae":  float(np.mean(np.abs(diff_A))),
     "label_corr": float(np.corrcoef(z_train_A, train_q)[0, 1]),
 }
-# C': 局部Kriging标签 vs 真实观测
+
 diff_C = z_train_C - train_q
 label_stats["C'"] = {
     "label_bias": float(np.mean(diff_C)),
@@ -351,7 +305,7 @@ label_stats["C'"] = {
     "label_corr": float(np.corrcoef(z_train_C, train_q)[0, 1]),
 }
 
-# ── 打印汇总表 ──
+
 METHOD_KEYS  = ["B", "A'", "C'"]
 METHOD_NAMES = {
     "B":  "B: Direct Obs (Baseline)",
@@ -403,7 +357,7 @@ if r2_B > r2_Ac and r2_B > r2_Cc:
 else:
     print("  → 控制样本分布后差距缩小，需在论文中调整结论表述强度。")
 
-# ── 保存 CSV ──
+
 rows = []
 for key in METHOD_KEYS:
     m = all_metrics[key]
@@ -417,16 +371,13 @@ summary_df.to_csv(csv_path, index=False)
 print(f"\n已保存: {csv_path}")
 
 
-# ════════════════════════════════════════════════════════════════════
-# 阶段5：可视化
-# ════════════════════════════════════════════════════════════════════
 print("\n" + "=" * 72)
 print("阶段5：可视化")
 print("=" * 72)
 
 COLORS = {"B": "#3a7ebf", "A'": "#e06c3a", "C'": "#4caf7d"}
 
-# ── 图1：三种方案散点图对比 ──
+
 print("绘制图1：控制实验散点图对比...")
 fig, axes = plt.subplots(1, 3, figsize=(18, 5.5))
 
@@ -456,7 +407,7 @@ fig.savefig(FIG_DIR / "step16_W1_scatter_controlled.png",
 plt.close(fig)
 print("  已保存: step16_W1_scatter_controlled.png")
 
-# ── 图2：残差直方图叠加对比 ──
+
 print("绘制图2：残差直方图...")
 fig, ax = plt.subplots(figsize=(10, 6))
 bins_hist = np.linspace(-150, 150, 80)
@@ -481,11 +432,11 @@ fig.savefig(FIG_DIR / "step16_W1_residual_hist_controlled.png",
 plt.close(fig)
 print("  已保存: step16_W1_residual_hist_controlled.png")
 
-# ── 图3：原始 vs 控制实验柱状图对比 ──
+
 print("绘制图3：原始 vs 控制实验对比...")
 fig, axes = plt.subplots(1, 2, figsize=(14, 6))
 
-# R² 对比
+
 ax = axes[0]
 labels = ["A (Original)", "A' (Controlled)", "B (Baseline)",
           "C (Original)", "C' (Controlled)"]
@@ -507,7 +458,7 @@ ax.legend(fontsize=9)
 ax.spines[["top", "right"]].set_visible(False)
 plt.setp(ax.get_xticklabels(), rotation=25, ha="right", fontsize=9)
 
-# RMSE 对比
+
 ax = axes[1]
 rmse_vals = [
     ORIGINAL["A"]["RMSE"], all_metrics["A'"]["RMSE"],
@@ -538,9 +489,6 @@ plt.close(fig)
 print("  已保存: step16_W1_bar_comparison.png")
 
 
-# ════════════════════════════════════════════════════════════════════
-# 汇总
-# ════════════════════════════════════════════════════════════════════
 print("\n" + "=" * 72)
 print("W1 控制实验全部完成！")
 print(f"  CSV   {csv_path}")
