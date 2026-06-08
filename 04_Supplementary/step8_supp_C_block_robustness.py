@@ -40,7 +40,7 @@ SEEDS = [42, 123, 456, 789, 2024]
 BLOCK_SIZES = [1.0, 1.5, 2.0, 4.0]
 
 print("=" * 80)
-print("补充实验 C：分组尺度稳健性检验（5 种子 × 4 尺度）")
+print("Supplementary experiment C: block-size robustness test (5 seeds x 4 scales)")
 print("=" * 80)
 
 
@@ -67,9 +67,9 @@ for bs in BLOCK_SIZES:
 
 
 print("\n" + "=" * 80)
-print("汇总：各尺度的均值 ± 标准差（5 种子）")
+print("summary: mean ± std by scale (5 seeds)")
 print("=" * 80)
-print(f"{'尺度':<12} {'R² mean':>10} {'R² std':>10} {'RMSE mean':>12} {'RMSE std':>10} {'MAE mean':>10}")
+print(f"{'scale':<12} {'R² mean':>10} {'R² std':>10} {'RMSE mean':>12} {'RMSE std':>10} {'MAE mean':>10}")
 print("-" * 68)
 
 res_df = pd.DataFrame(all_results)
@@ -81,11 +81,11 @@ for bs in BLOCK_SIZES:
           f"{sub['RMSE'].mean():>12.2f} {sub['RMSE'].std():>10.2f} {sub['MAE'].mean():>10.2f}")
 
 
-print("\n--- 完整结果 ---")
-print(f"{'尺度':<8} {'seed':>6} {'n_train':>8} {'n_test':>8} {'R²':>8} {'RMSE':>8} {'MAE':>8}")
+print("\n--- complete results ---")
+print(f"{'scale':<8} {'seed':>6} {'n_train':>8} {'n_test':>8} {'R²':>8} {'RMSE':>8} {'MAE':>8}")
 print("-" * 58)
 for r in all_results:
     print(f"{r['block_size']}°{'':<4} {r['seed']:>6} {r['n_train']:>8,} {r['n_test']:>8,} "
           f"{r['R2']:>8.4f} {r['RMSE']:>8.2f} {r['MAE']:>8.2f}")
 
-print("\n补充实验 C 完成!")
+print("\nsupplementary experiment C completed!")

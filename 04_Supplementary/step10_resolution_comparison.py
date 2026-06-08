@@ -21,7 +21,7 @@ from lightgbm import LGBMRegressor
 parser = argparse.ArgumentParser()
 parser.add_argument("--res", type=float, required=True,
                     choices=[1.0, 0.25],
-                    help="网格分辨率: 1.0 或 0.25")
+                    help="grid resolution: 1.0 or 0.25")
 args = parser.parse_args()
 RES = args.res
 
@@ -79,20 +79,20 @@ sys.stdout = Tee(OUT_PATH)
 
 
 print("=" * 70)
-print(f"分辨率: {RES_LABEL}  |  特征文件: {FEAT_PATH.name}")
+print(f"resolution: {RES_LABEL}  |  feature file: {FEAT_PATH.name}")
 print("=" * 70)
 print()
 print("=" * 70)
-print("Step A: 读取新数据 + 基础过滤")
+print("Step A: load new data and apply basic filters")
 print("=" * 70)
 
 df = pd.read_csv(RAW_PATH, sep="\t", skiprows=12, encoding="latin-1",
                  low_memory=False)
-print(f"  原始总行数: {len(df):,}")
+print(f"  raw rows: {len(df):,}")
 
 marine_env = ["[offshore (continental)]", "[offshore (marine)]"]
 df = df[df["environment"].isin(marine_env)].copy()
-print(f"  保留 offshore: {len(df):,}")
+print(f"  retained offshore: {len(df):,}")
 
 df["q"]       = pd.to_numeric(df["q"],       errors="coerce")
 df["lat_NS"]  = pd.to_numeric(df["lat_NS"],  errors="coerce")
@@ -101,10 +101,10 @@ df = df.dropna(subset=["q", "lat_NS", "long_EW"])
 df = df[(df["q"] > Q_MIN) & (df["q"] <= Q_MAX)]
 df = df[(df["lat_NS"] >= -90) & (df["lat_NS"] <= 90)]
 df = df[(df["long_EW"] >= -180) & (df["long_EW"] <= 180)]
-print(f"  过滤异常值后: {len(df):,}")
+print(f"  after outlier filtering: {len(df):,}")
 
 df["qc_m"] = df["Quality_Score_Parent"].astype(str).str.extract(r"\.(M[0-9x]+)\.")[0]
-print(f"  M等级分布:")
+print(f"  M-grade distribution:")
 for m in ["M1", "M1x", "M2", "M2x", "M3", "M3x", "M4", "M4x", "Mx"]:
     n = (df["qc_m"] == m).sum()
     if n > 0:
@@ -113,14 +113,14 @@ for m in ["M1", "M1x", "M2", "M2x", "M3", "M3x", "M4", "M4x", "Mx"]:
 
 print()
 print("=" * 70)
-print("Step B: 分配网格 + 匹配特征")
+print("Step B: assign grid cells and match features")
 print("=" * 70)
 
 df["grid_lat"] = (np.floor(df["lat_NS"]  / RES) * RES + RES / 2).round(ROUND_DIGS)
 df["grid_lon"] = (np.floor(df["long_EW"] / RES) * RES + RES / 2).round(ROUND_DIGS)
 
 
-print("  加载陆地掩膜...")
+print("  loading land mask...")
 land = gpd.read_file(NE10_PATH)
 unique_grids = df[["grid_lat", "grid_lon"]].drop_duplicates()
 geometry = [Point(row.grid_lon, row.grid_lat) for row in unique_grids.itertuples()]
@@ -133,10 +133,10 @@ land_grids = set(zip(
 before = len(df)
 df["_grid_key"] = list(zip(df["grid_lat"], df["grid_lon"]))
 df = df[~df["_grid_key"].isin(land_grids)].drop(columns=["_grid_key"])
-print(f"  陆地掩膜: {before:,} -> {len(df):,} (去除 {before - len(df):,})")
+print(f"  land mask: {before:,} -> {len(df):,} (removed {before - len(df):,})")
 
 
-print("  匹配特征...")
+print("  matching features...")
 feat = pd.read_csv(FEAT_PATH, usecols=["lon", "lat"] + FEATURE_COLS)
 feat["grid_lon"] = feat["lon"].round(ROUND_DIGS)
 feat["grid_lat"] = feat["lat"].round(ROUND_DIGS)
@@ -145,10 +145,10 @@ feat = feat.drop_duplicates(subset=["grid_lon", "grid_lat"])
 
 df = df.merge(feat, on=["grid_lon", "grid_lat"], how="left")
 n_matched = df[FEATURE_COLS[0]].notna().sum()
-print(f"  特征匹配: {n_matched:,} / {len(df):,}")
+print(f"  feature matches: {n_matched:,} / {len(df):,}")
 
 
-print("  提取洋壳年龄...")
+print("  extracting oceanic crust age...")
 ds_nc = nc.Dataset(str(NC_PATH))
 nc_lon = ds_nc.variables["lon"][:]
 nc_lat = ds_nc.variables["lat"][:]
@@ -174,13 +174,13 @@ df["oceanic_crust_age_Ma"] = df.apply(
     lambda r: age_map.get((r["grid_lat"], r["grid_lon"]), np.nan), axis=1
 )
 n_age = df["oceanic_crust_age_Ma"].notna().sum()
-print(f"  洋壳年龄匹配: {n_age:,} / {len(df):,}")
+print(f"  oceanic crust age matches: {n_age:,} / {len(df):,}")
 
 
 before = len(df)
 df = df.dropna(subset=FEATURE_COLS).copy()
 df["oceanic_crust_age_Ma"] = df["oceanic_crust_age_Ma"].fillna(-1.0)
-print(f"  丢弃特征缺失: {before:,} -> {len(df):,}")
+print(f"  dropped rows with missing features: {before:,} -> {len(df):,}")
 
 
 def assign_basin(lon, lat):
@@ -197,34 +197,34 @@ def assign_basin(lon, lat):
 df["basin"] = df.apply(lambda r: assign_basin(r["grid_lon"], r["grid_lat"]), axis=1)
 
 n_grids_total = df[["grid_lat", "grid_lon"]].drop_duplicates().shape[0]
-print(f"\n  最终数据集: {len(df):,} 条记录, {n_grids_total:,} 个网格")
-print(f"  洋盆分布: {dict(df['basin'].value_counts())}")
+print(f"\n  final dataset: {len(df):,} records, {n_grids_total:,} grid cells")
+print(f"  basin distribution: {dict(df['basin'].value_counts())}")
 
 
 print()
 print("=" * 70)
-print("Step C: 质量分级数据集")
+print("Step C: quality-tiered datasets")
 print("=" * 70)
 
 DATASETS = {
     "A: M1+M1x":       ["M1", "M1x"],
-    "B: M1-M2(含x)":   ["M1", "M1x", "M2", "M2x"],
-    "C: M1-M3(含x)":   ["M1", "M1x", "M2", "M2x", "M3", "M3x"],
-    "ALL: 排除Mx":     ["M1", "M1x", "M2", "M2x", "M3", "M3x", "M4", "M4x"],
-    "D: 全部(含Mx)":   None,
+    "B: M1-M2(including x)":   ["M1", "M1x", "M2", "M2x"],
+    "C: M1-M3(including x)":   ["M1", "M1x", "M2", "M2x", "M3", "M3x"],
+    "ALL: excluding Mx":     ["M1", "M1x", "M2", "M2x", "M3", "M3x", "M4", "M4x"],
+    "D: all (including Mx)":   None,
 }
 
 for label, m_levels in DATASETS.items():
     sub = df if m_levels is None else df[df["qc_m"].isin(m_levels)]
     n_g = sub[["grid_lat", "grid_lon"]].drop_duplicates().shape[0]
-    print(f"  {label:<20} 记录={len(sub):>6,}  网格={n_g:>5,}  "
-          f"q均值={sub['q'].mean():.1f}  q中位数={sub['q'].median():.1f}  "
-          f"q标准差={sub['q'].std():.1f}")
+    print(f"  {label:<20} records={len(sub):>6,}  grid cells={n_g:>5,}  "
+          f"q mean={sub['q'].mean():.1f}  q median={sub['q'].median():.1f}  "
+          f"q std={sub['q'].std():.1f}")
 
 
 print()
 print("=" * 70)
-print("Step D: 模型训练与验证")
+print("Step D: model training and validation")
 print("=" * 70)
 
 MODELS = {
@@ -248,27 +248,27 @@ for ds_label, m_levels in DATASETS.items():
     sub = df.copy() if m_levels is None else df[df["qc_m"].isin(m_levels)].copy()
 
     if len(sub) < 50:
-        print(f"\n  [{ds_label}] 样本不足({len(sub)}), 跳过")
+        print(f"\n  [{ds_label}] insufficient samples ({len(sub)}), skipped")
         continue
 
     X = sub[ALL_FEAT].values
     y = sub[TARGET].values
 
     print(f"\n{'='*70}")
-    print(f"数据集: {ds_label}  ({len(sub):,} 条记录)")
+    print(f"dataset: {ds_label}  ({len(sub):,} records)")
     print(f"{'='*70}")
 
 
     X_tr, X_te, y_tr, y_te = train_test_split(X, y, test_size=0.3, random_state=42)
-    print(f"\n  方案1: 随机划分 (train={len(y_tr):,}, test={len(y_te):,})")
-    print(f"  {'模型':<12} {'R²':>8} {'RMSE':>8} {'MAE':>8} {'Bias':>8}")
+    print(f"\n  Scheme 1: random split (train={len(y_tr):,}, test={len(y_te):,})")
+    print(f"  {'model':<12} {'R²':>8} {'RMSE':>8} {'MAE':>8} {'Bias':>8}")
     print("  " + "-" * 48)
     for mname, mfunc in MODELS.items():
         model = mfunc()
         model.fit(X_tr, y_tr)
         r2, rmse, mae, bias = calc_metrics(y_te, model.predict(X_te))
         print(f"  {mname:<12} {r2:>8.4f} {rmse:>8.2f} {mae:>8.2f} {bias:>8.2f}")
-        results.append((ds_label, "随机划分", mname, len(sub), len(y_te), r2, rmse, mae, bias))
+        results.append((ds_label, "random split", mname, len(sub), len(y_te), r2, rmse, mae, bias))
 
 
     sub2 = sub.copy()
@@ -286,9 +286,9 @@ for ds_label, m_levels in DATASETS.items():
         tr = sub2[~sub2["block_id"].isin(test_blocks)]
         te = sub2[sub2["block_id"].isin(test_blocks)]
 
-        print(f"\n  方案2: 空间分组 2°×2° (train={len(tr):,}, test={len(te):,}, "
+        print(f"\n  Scheme 2: 2°x2° spatial block split (train={len(tr):,}, test={len(te):,}, "
               f"blocks={len(blocks)})")
-        print(f"  {'模型':<12} {'R²':>8} {'RMSE':>8} {'MAE':>8} {'Bias':>8}")
+        print(f"  {'model':<12} {'R²':>8} {'RMSE':>8} {'MAE':>8} {'Bias':>8}")
         print("  " + "-" * 48)
         for mname, mfunc in MODELS.items():
             model = mfunc()
@@ -296,13 +296,13 @@ for ds_label, m_levels in DATASETS.items():
             r2, rmse, mae, bias = calc_metrics(te[TARGET].values,
                                                model.predict(te[ALL_FEAT].values))
             print(f"  {mname:<12} {r2:>8.4f} {rmse:>8.2f} {mae:>8.2f} {bias:>8.2f}")
-            results.append((ds_label, "空间分组", mname, len(sub), len(te), r2, rmse, mae, bias))
+            results.append((ds_label, "spatial block split", mname, len(sub), len(te), r2, rmse, mae, bias))
     else:
-        print(f"\n  方案2: 空间分组 - 样本不足, 跳过")
+        print(f"\n  Scheme 2: spatial block split - insufficient samples, skipped")
 
 
-    print(f"\n  方案3: 跨洋盆验证 (ExtraTrees)")
-    print(f"  {'洋盆':<12} {'R²':>8} {'RMSE':>8} {'MAE':>8} {'Bias':>8}")
+    print(f"\n  Scheme 3: cross-basin validation (ExtraTrees)")
+    print(f"  {'basin':<12} {'R²':>8} {'RMSE':>8} {'MAE':>8} {'Bias':>8}")
     print("  " + "-" * 48)
     for basin in ["Pacific", "Atlantic", "Indian"]:
         tr_b = sub[sub["basin"] != basin]
@@ -314,17 +314,17 @@ for ds_label, m_levels in DATASETS.items():
             r2, rmse, mae, bias = calc_metrics(te_b[TARGET].values,
                                                et.predict(te_b[ALL_FEAT].values))
             print(f"  {basin:<12} {r2:>8.4f} {rmse:>8.2f} {mae:>8.2f} {bias:>8.2f}")
-            results.append((ds_label, f"跨盆-{basin}", "ExtraTrees",
+            results.append((ds_label, f"cross-basin-{basin}", "ExtraTrees",
                             len(sub), len(te_b), r2, rmse, mae, bias))
         else:
-            print(f"  {basin:<12} 样本不足")
+            print(f"  {basin:<12} insufficient samples")
 
 
 print()
 print("=" * 90)
-print(f"汇总: ExtraTrees 在各数据集 × 各验证方案下的 R²  [{RES_LABEL}]")
+print(f"summary: ExtraTrees R² across datasets and validation schemes  [{RES_LABEL}]")
 print("=" * 90)
-print(f"{'数据集':<20} {'验证方案':<16} {'n_total':>8} {'n_test':>8} "
+print(f"{'dataset':<20} {'validation scheme':<16} {'n_total':>8} {'n_test':>8} "
       f"{'R²':>8} {'RMSE':>8} {'MAE':>8}")
 print("-" * 82)
 for r in results:
@@ -332,4 +332,4 @@ for r in results:
         print(f"{r[0]:<20} {r[1]:<16} {r[3]:>8,} {r[4]:>8,} "
               f"{r[5]:>8.4f} {r[6]:>8.2f} {r[7]:>8.2f}")
 
-print(f"\n结果已保存至: {OUT_PATH}")
+print(f"\nresults saved to: {OUT_PATH}")

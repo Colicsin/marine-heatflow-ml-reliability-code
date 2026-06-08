@@ -48,7 +48,7 @@ def calc_moran_knn(coords, values, k=8):
 
 
 print("=" * 80)
-print("实验5：特征工程效果评估 —— 对应论文表13、图7")
+print("Experiment 5: feature engineering assessment, corresponding to manuscript Table 13 and Figure 7")
 print("=" * 80)
 
 
@@ -75,12 +75,12 @@ TRANS = ["inv_upper_crust", "inv_moho_depth", "log_hotspot_dist",
 df = df.replace([np.inf, -np.inf], np.nan).dropna(subset=FEATURE_COLS + INTER + TRANS + [TARGET])
 
 FEAT_SETS = [
-    ("A: 14基础特征", FEATURE_COLS),
-    ("B: +5交互(19)", FEATURE_COLS + INTER),
-    ("C: +交互+变换(25)", FEATURE_COLS + INTER + TRANS),
+    ("A: 14base features", FEATURE_COLS),
+    ("B: +5interactions(19)", FEATURE_COLS + INTER),
+    ("C: +interactions+transforms(25)", FEATURE_COLS + INTER + TRANS),
 ]
 
-print(f"\n{'方案':<25} {'n_feat':>6} {'随机R²':>8} {'空间R²':>8} {'随机RMSE':>10} {'空间RMSE':>10}")
+print(f"\n{'scheme':<25} {'n_feat':>6} {'random R²':>8} {'spatial R²':>8} {'random RMSE':>10} {'spatial RMSE':>10}")
 print("-" * 75)
 
 for label, feat_cols in FEAT_SETS:
@@ -108,9 +108,9 @@ et_full.fit(df[all_25].values, df[TARGET].values)
 mdi = et_full.feature_importances_
 mdi_order = np.argsort(mdi)[::-1]
 
-print("\n--- 25特征 MDI 排序 ---")
+print("\n--- 25feature MDI ranking ---")
 for rank, i in enumerate(mdi_order):
-    marker = " ★" if rank < 14 else " (删除)"
+    marker = " ★" if rank < 14 else " (removed)"
     print(f"  {rank+1:>2}. {all_25[i]:<35} MDI={mdi[i]:>8.2f}{marker}")
 
 
@@ -125,7 +125,7 @@ et14s = ExtraTreesRegressor(n_estimators=100, max_depth=20, random_state=42, n_j
 et14s.fit(tr14[top14_cols].values, tr14[TARGET].values)
 r2_14s = r2_score(te14[TARGET].values, et14s.predict(te14[top14_cols].values))
 rmse_14s = np.sqrt(mean_squared_error(te14[TARGET].values, et14s.predict(te14[top14_cols].values)))
-print(f"\n{'D: 精简至Top14':<25} {14:>6} {r2_14:>8.4f} {r2_14s:>8.4f} {rmse_14:>10.2f} {rmse_14s:>10.2f}")
+print(f"\n{'D: reduced to Top 14':<25} {14:>6} {r2_14:>8.4f} {r2_14s:>8.4f} {rmse_14:>10.2f} {rmse_14s:>10.2f}")
 
 
 fig, ax = plt.subplots(figsize=(10, 6))
@@ -154,11 +154,11 @@ ax.legend(handles=legend_elements, loc="lower right", fontsize=10)
 plt.tight_layout()
 fig.savefig(FIG_DIR / "step7_mdi_top14.png", dpi=300, bbox_inches="tight")
 plt.close()
-print(f"\n图已保存: {FIG_DIR / 'step7_mdi_top14.png'}")
+print(f"\nsaved figure: {FIG_DIR / 'step7_mdi_top14.png'}")
 
 
 print("\n" + "=" * 80)
-print("实验6：特征参数敏感性 —— 对应论文图8")
+print("Experiment 6: feature-parameter sensitivity, corresponding to manuscript Figure 8")
 print("=" * 80)
 
 
@@ -166,7 +166,7 @@ tr_s, te_s = spatial_block_split(df)
 et_base = ExtraTreesRegressor(n_estimators=100, max_depth=20, random_state=42, n_jobs=-1)
 et_base.fit(tr_s[FEATURE_COLS].values, tr_s[TARGET].values)
 r2_base = r2_score(te_s[TARGET].values, et_base.predict(te_s[FEATURE_COLS].values))
-print(f"基线 R² (空间分组): {r2_base:.4f}\n")
+print(f"baseline R² (spatial block split): {r2_base:.4f}\n")
 
 noise_levels = [5, 10, 20]
 sensitivity = {f: [] for f in FEATURE_COLS}
@@ -178,7 +178,7 @@ SHORT_NAMES = [
     "crust_age",
 ]
 
-print(f"{'特征':<20}", end="")
+print(f"{'feature':<20}", end="")
 for nl in noise_levels:
     print(f"  {'noise='+str(nl)+'%':>12}", end="")
 print()
@@ -215,21 +215,21 @@ ax.legend(fontsize=10)
 plt.tight_layout()
 fig.savefig(FIG_DIR / "step7_feature_sensitivity.png", dpi=300, bbox_inches="tight")
 plt.close()
-print(f"\n图已保存: {FIG_DIR / 'step7_feature_sensitivity.png'}")
+print(f"\nsaved figure: {FIG_DIR / 'step7_feature_sensitivity.png'}")
 
 
 print("\n" + "=" * 80)
-print("实验7：分组参数敏感性 —— 对应论文表14")
+print("Experiment 7: block-size sensitivity, corresponding to manuscript Table 14")
 print("=" * 80)
 
 block_sizes = [1.0, 1.5, 2.0, 4.0]
-print(f"\n{'分组尺度':<12} {'n_train':>8} {'n_test':>8} {'R²':>8} {'RMSE':>8} {'MAE':>8} {'Moran I':>8}")
+print(f"\n{'block size':<12} {'n_train':>8} {'n_test':>8} {'R²':>8} {'RMSE':>8} {'MAE':>8} {'Moran I':>8}")
 print("-" * 68)
 
 for bs in block_sizes:
     tr_b, te_b = spatial_block_split(df, block_size=bs)
     if len(te_b) < 50:
-        print(f"{bs}°×{bs}°     样本不足")
+        print(f"{bs}°×{bs}°     insufficient samples")
         continue
     et_b = ExtraTreesRegressor(n_estimators=100, max_depth=20, random_state=42, n_jobs=-1)
     et_b.fit(tr_b[FEATURE_COLS].values, tr_b[TARGET].values)
@@ -243,5 +243,5 @@ for bs in block_sizes:
     print(f"{bs}°×{bs}°{'':<6} {len(tr_b):>8,} {len(te_b):>8,} {r2_b:>8.4f} {rmse_b:>8.2f} {mae_b:>8.2f} {mi_b:>8.4f}")
 
 print("\n" + "=" * 80)
-print("第二批实验（特征工程+敏感性）全部完成!")
+print("batch-2 experiments (feature engineering and sensitivity) all done!")
 print("=" * 80)

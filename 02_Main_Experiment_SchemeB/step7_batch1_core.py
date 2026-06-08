@@ -139,13 +139,13 @@ def calc_geary_c(coords, values, k=8):
 
 
 print("=" * 80)
-print("实验1：6模型对比（空间分组 2°×2°）—— 对应论文表6")
+print("Experiment 1: six-model comparison (2°x2° spatial block split), corresponding to manuscript Table 6")
 print("=" * 80)
 
 tr, te, n_blocks = spatial_block_split(df)
-print(f"训练集: {len(tr):,}, 测试集: {len(te):,}, blocks: {n_blocks}\n")
+print(f"training set: {len(tr):,}, test set: {len(te):,}, blocks: {n_blocks}\n")
 
-header = f"{'模型':<12} {'R²':>8} {'RMSE':>8} {'MAE':>8} {'MedAE':>8} {'MAPE%':>8} {'Bias':>8} {'NSE':>8} {'耗时(s)':>8}"
+header = f"{'model':<12} {'R²':>8} {'RMSE':>8} {'MAE':>8} {'MedAE':>8} {'MAPE%':>8} {'Bias':>8} {'NSE':>8} {'time (s)':>8}"
 print(header)
 print("-" * len(header))
 
@@ -182,11 +182,11 @@ plt.suptitle("6 Models - Spatial Block 2°×2° Validation", fontsize=14, fontwe
 plt.tight_layout()
 fig.savefig(FIG_DIR / "step7_scatter_6models.png", dpi=300, bbox_inches="tight")
 plt.close()
-print(f"\n  图已保存: {FIG_DIR / 'step7_scatter_6models.png'}")
+print(f"\n  saved figure: {FIG_DIR / 'step7_scatter_6models.png'}")
 
 
 print("\n" + "=" * 80)
-print("实验2：三种验证策略对比（ExtraTrees）—— 对应论文表7")
+print("Experiment 2: comparison of three validation strategies (ExtraTrees), corresponding to manuscript Table 7")
 print("=" * 80)
 
 exp2_results = []
@@ -204,7 +204,7 @@ te_idx = df.index[np.isin(np.arange(len(df)),
 coords_random = df.loc[te_idx, ["grid_lat", "grid_lon"]].values
 residuals_random = y_te - pred_random
 moran_random = calc_moran_knn(coords_random, residuals_random, k=8)
-exp2_results.append(("随机划分", m_random, moran_random, len(y_te)))
+exp2_results.append(("random split", m_random, moran_random, len(y_te)))
 
 
 tr2, te2, _ = spatial_block_split(df)
@@ -215,7 +215,7 @@ m_spatial = calc_full_metrics(te2[TARGET].values, pred_spatial)
 coords_spatial = te2[["grid_lat", "grid_lon"]].values
 residuals_spatial = te2[TARGET].values - pred_spatial
 moran_spatial = calc_moran_knn(coords_spatial, residuals_spatial, k=8)
-exp2_results.append(("空间分组2°×2°", m_spatial, moran_spatial, len(te2)))
+exp2_results.append(("2°x2° spatial block split", m_spatial, moran_spatial, len(te2)))
 
 
 for basin in ["Pacific", "Atlantic", "Indian"]:
@@ -228,9 +228,9 @@ for basin in ["Pacific", "Atlantic", "Indian"]:
     coords_b = te_b[["grid_lat", "grid_lon"]].values
     res_b = te_b[TARGET].values - pred_b
     moran_b = calc_moran_knn(coords_b, res_b, k=8)
-    exp2_results.append((f"跨盆-{basin}", m_b, moran_b, len(te_b)))
+    exp2_results.append((f"cross-basin-{basin}", m_b, moran_b, len(te_b)))
 
-print(f"\n{'方案':<16} {'n_test':>8} {'R²':>8} {'RMSE':>8} {'MAE':>8} {'Bias':>8} {'Moran I':>8}")
+print(f"\n{'scheme':<16} {'n_test':>8} {'R²':>8} {'RMSE':>8} {'MAE':>8} {'Bias':>8} {'Moran I':>8}")
 print("-" * 72)
 for label, m, mi, n in exp2_results:
     print(f"{label:<16} {n:>8,} {m['R2']:>8.4f} {m['RMSE']:>8.2f} {m['MAE']:>8.2f} "
@@ -238,12 +238,12 @@ for label, m, mi, n in exp2_results:
 
 
 print("\n" + "=" * 80)
-print("实验3：空间自相关深度分析 —— 对应论文表8、图4、图5")
+print("Experiment 3: spatial autocorrelation analysis, corresponding to manuscript Table 8 and Figures 4-5")
 print("=" * 80)
 
 
-print("\n--- 3a: 空间自相关指标（空间分组2°×2°残差）---")
-print(f"  K近邻 Moran's I (k=8): {moran_spatial:.4f}")
+print("\n--- 3a: spatial autocorrelation metrics (2°x2° spatial-block residuals) ---")
+print(f"  K-nearest-neighbor Moran's I (k=8): {moran_spatial:.4f}")
 
 
 n_sample = min(5000, len(residuals_spatial))
@@ -254,13 +254,13 @@ res_sample = residuals_spatial[sample_idx]
 
 for d_km in [200, 400, 600]:
     mi_d = calc_moran_distance(coords_sample, res_sample, d_km)
-    print(f"  距离阈值 Moran's I ({d_km}km, n={n_sample}): {mi_d:.4f}")
+    print(f"  distance-threshold Moran's I ({d_km}km, n={n_sample}): {mi_d:.4f}")
 
 gc = calc_geary_c(coords_spatial, residuals_spatial, k=8)
 print(f"  Geary's C (k=8): {gc:.4f}")
 
 
-print("\n--- 3b: Variogram 分析 ---")
+print("\n--- 3b: Variogram analysis ---")
 try:
     from skgstat import Variogram
 
@@ -269,8 +269,8 @@ try:
     v_coords = coords_spatial[vidx] * [111.0, 111.0 * np.cos(np.radians(np.mean(coords_spatial[:, 0])))]
     v_values = residuals_spatial[vidx]
     V = Variogram(v_coords, v_values, model="spherical", n_lags=25, maxlag=5000)
-    print(f"  Variogram 模型: spherical")
-    print(f"  Range (空间相关长度): {V.parameters[0]:.0f} km")
+    print(f"  Variogram model: spherical")
+    print(f"  Range (spatial correlation length): {V.parameters[0]:.0f} km")
     print(f"  Sill: {V.parameters[1]:.2f}")
     print(f"  Nugget: {V.parameters[2]:.2f}")
 
@@ -282,12 +282,12 @@ try:
     ax_v.set_title("Variogram of Prediction Residuals (Spatial Block 2°×2°)", fontsize=13)
     fig_v.savefig(FIG_DIR / "step7_variogram.png", dpi=300, bbox_inches="tight")
     plt.close()
-    print(f"  图已保存: {FIG_DIR / 'step7_variogram.png'}")
+    print(f"  saved figure: {FIG_DIR / 'step7_variogram.png'}")
 except Exception as e:
-    print(f"  Variogram 计算失败: {e}")
+    print(f"  Variogram computation failed: {e}")
 
 
-print("\n--- 3c: 残差空间分布图 ---")
+print("\n--- 3c: residual spatial distribution map ---")
 fig_r = plt.figure(figsize=(18, 9))
 ax_r = fig_r.add_subplot(1, 1, 1, projection=ccrs.Robinson())
 ax_r.set_global()
@@ -314,8 +314,8 @@ ax_r.set_title("Spatial Distribution of Prediction Residuals (Block 2°×2°, Ex
                fontsize=14, fontweight="bold", pad=15)
 fig_r.savefig(FIG_DIR / "step7_residual_spatial.png", dpi=300, bbox_inches="tight")
 plt.close()
-print(f"  图已保存: {FIG_DIR / 'step7_residual_spatial.png'}")
+print(f"  saved figure: {FIG_DIR / 'step7_residual_spatial.png'}")
 
 print("\n" + "=" * 80)
-print("第一批实验全部完成!")
+print("batch-1 experiments all done!")
 print("=" * 80)

@@ -66,7 +66,7 @@ def main():
     merged.to_csv(CSV_OUT, index=False)
 
     print("=" * 78)
-    print("Step15 划分方式对比：随机划分 vs 空间分组")
+    print("Step15 split comparison: random split vs spatial block split")
     print("=" * 78)
     print(
         f"{'Method':<22} {'R2(random)':>11} {'R2(spatial)':>12} {'Delta':>9} "

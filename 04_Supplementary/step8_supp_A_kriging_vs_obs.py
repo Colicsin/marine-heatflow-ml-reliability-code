@@ -51,7 +51,7 @@ def assign_basin(lon, lat):
 
 
 print("=" * 80)
-print("补充实验 A：Kriging 插值标签 vs 真实观测标签")
+print("Supplementary experiment A: Kriging-derived labels vs observed labels")
 print("=" * 80)
 
 kriging = pd.read_csv(FEAT_PATH)
@@ -63,20 +63,20 @@ kriging["oceanic_crust_age_Ma"] = kriging["oceanic_crust_age_Ma"].fillna(-1.0)
 kriging = kriging.dropna(subset=FEATURE_COLS + ["q"])
 kriging["basin"] = kriging.apply(
     lambda r: assign_basin(r["grid_lon"], r["grid_lat"]), axis=1)
-print(f"\nKriging 标签数据集: {len(kriging):,} 网格点")
+print(f"\nKriging-label dataset: {len(kriging):,} grid cells")
 print(f"  q: mean={kriging['q'].mean():.1f}, std={kriging['q'].std():.1f}")
 
 
 obs = pd.read_csv(OBS_PATH)
 obs = obs.dropna(subset=FEATURE_COLS + ["q"])
-print(f"\n真实观测数据集: {len(obs):,} 条记录, "
-      f"{obs[['grid_lat','grid_lon']].drop_duplicates().shape[0]:,} 网格")
+print(f"\nobserved dataset: {len(obs):,} records, "
+      f"{obs[['grid_lat','grid_lon']].drop_duplicates().shape[0]:,} grid cells")
 print(f"  q: mean={obs['q'].mean():.1f}, std={obs['q'].std():.1f}")
 
 
 datasets = {
-    "Kriging标签(123k网格)": (kriging, FEATURE_COLS, "q", "grid_lat", "grid_lon"),
-    "真实观测(28k记录)":     (obs,     FEATURE_COLS, "q", "grid_lat", "grid_lon"),
+    "Kriging labels (123k grid cells)": (kriging, FEATURE_COLS, "q", "grid_lat", "grid_lon"),
+    "Observed values (28k records)":     (obs,     FEATURE_COLS, "q", "grid_lat", "grid_lon"),
 }
 
 results = []
@@ -86,7 +86,7 @@ for ds_name, (data, feat_cols, target, lat_col, lon_col) in datasets.items():
     y = data[target].values
 
     print(f"\n{'='*70}")
-    print(f"数据集: {ds_name}")
+    print(f"dataset: {ds_name}")
     print(f"{'='*70}")
 
 
@@ -94,16 +94,16 @@ for ds_name, (data, feat_cols, target, lat_col, lon_col) in datasets.items():
     et = ExtraTreesRegressor(n_estimators=100, max_depth=20, random_state=42, n_jobs=-1)
     et.fit(X_tr, y_tr)
     m = calc_metrics(y_te, et.predict(X_te))
-    results.append((ds_name, "随机划分", len(y_te), m))
-    print(f"  随机划分:     n_test={len(y_te):>7,}  R²={m['R2']:.4f}  RMSE={m['RMSE']:.2f}  MAE={m['MAE']:.2f}")
+    results.append((ds_name, "random split", len(y_te), m))
+    print(f"  random split:     n_test={len(y_te):>7,}  R²={m['R2']:.4f}  RMSE={m['RMSE']:.2f}  MAE={m['MAE']:.2f}")
 
 
     tr, te, n_blocks = spatial_block_split(data, lat_col, lon_col)
     et2 = ExtraTreesRegressor(n_estimators=100, max_depth=20, random_state=42, n_jobs=-1)
     et2.fit(tr[feat_cols].values, tr[target].values)
     m2 = calc_metrics(te[target].values, et2.predict(te[feat_cols].values))
-    results.append((ds_name, "空间分组2°×2°", len(te), m2))
-    print(f"  空间分组2°×2°: n_test={len(te):>7,}  R²={m2['R2']:.4f}  RMSE={m2['RMSE']:.2f}  MAE={m2['MAE']:.2f}")
+    results.append((ds_name, "2°x2° spatial block split", len(te), m2))
+    print(f"  2°x2° spatial block split: n_test={len(te):>7,}  R²={m2['R2']:.4f}  RMSE={m2['RMSE']:.2f}  MAE={m2['MAE']:.2f}")
 
 
     for basin in ["Pacific", "Atlantic", "Indian"]:
@@ -114,27 +114,27 @@ for ds_name, (data, feat_cols, target, lat_col, lon_col) in datasets.items():
                                        random_state=42, n_jobs=-1)
             et3.fit(tr_b[feat_cols].values, tr_b[target].values)
             m3 = calc_metrics(te_b[target].values, et3.predict(te_b[feat_cols].values))
-            results.append((ds_name, f"跨盆-{basin}", len(te_b), m3))
-            print(f"  跨盆-{basin:<9} n_test={len(te_b):>7,}  R²={m3['R2']:.4f}  RMSE={m3['RMSE']:.2f}  MAE={m3['MAE']:.2f}")
+            results.append((ds_name, f"cross-basin-{basin}", len(te_b), m3))
+            print(f"  cross-basin-{basin:<9} n_test={len(te_b):>7,}  R²={m3['R2']:.4f}  RMSE={m3['RMSE']:.2f}  MAE={m3['MAE']:.2f}")
 
 
 print("\n" + "=" * 90)
-print("汇总对比表：Kriging 标签 vs 真实观测")
+print("Summary comparison table: Kriging labels vs observed labels")
 print("=" * 90)
-print(f"{'数据集':<22} {'验证方案':<16} {'n_test':>8} {'R²':>8} {'RMSE':>8} {'MAE':>8} {'Bias':>8}")
+print(f"{'dataset':<22} {'validation scheme':<16} {'n_test':>8} {'R²':>8} {'RMSE':>8} {'MAE':>8} {'Bias':>8}")
 print("-" * 82)
 for ds_name, scheme, n, m in results:
     tag = "K" if "Kriging" in ds_name else "O"
     print(f"[{tag}] {scheme:<18} {n:>8,} {m['R2']:>8.4f} {m['RMSE']:>8.2f} {m['MAE']:>8.2f} {m['Bias']:>8.2f}")
 
 
-print("\n--- R² 差异 (Kriging - 观测) ---")
+print("\n--- R² difference (Kriging - observed) ---")
 kriging_results = {r[1]: r[3] for r in results if "Kriging" in r[0]}
-obs_results = {r[1]: r[3] for r in results if "真实" in r[0]}
+obs_results = {r[1]: r[3] for r in results if "Observed" in r[0]}
 for scheme in kriging_results:
     if scheme in obs_results:
         diff = kriging_results[scheme]["R2"] - obs_results[scheme]["R2"]
         print(f"  {scheme:<18} Kriging R²={kriging_results[scheme]['R2']:.4f}  "
-              f"观测 R²={obs_results[scheme]['R2']:.4f}  差={diff:+.4f}")
+              f"observed R²={obs_results[scheme]['R2']:.4f}  difference={diff:+.4f}")
 
-print("\n补充实验 A 完成!")
+print("\nsupplementary experiment A completed!")

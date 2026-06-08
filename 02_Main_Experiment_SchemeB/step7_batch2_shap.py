@@ -31,12 +31,12 @@ df = pd.read_csv(DATA_PATH).dropna(subset=FEATURE_COLS + [TARGET])
 X = df[FEATURE_COLS].values
 y = df[TARGET].values
 
-print("训练 ExtraTrees（全量数据）...")
+print("training ExtraTrees (all data)...")
 model = ExtraTreesRegressor(n_estimators=100, max_depth=20, random_state=42, n_jobs=-1)
 model.fit(X, y)
 
 
-print("计算 SHAP 值（采样3000）...")
+print("computing SHAP values (sampling 3000)...")
 rng = np.random.default_rng(42)
 idx_shap = rng.choice(len(X), 3000, replace=False)
 X_shap = X[idx_shap]
@@ -48,15 +48,15 @@ mean_abs_shap = np.mean(np.abs(shap_values), axis=0)
 importance_order = np.argsort(mean_abs_shap)[::-1]
 
 print("\n" + "=" * 60)
-print("SHAP 特征重要性排序 —— 对应论文表9")
+print("SHAP feature-importance ranking - corresponding to manuscript Table 9")
 print("=" * 60)
-print(f"{'排名':<4} {'特征':<30} {'平均|SHAP|':>12}")
+print(f"{'rank':<4} {'feature':<30} {'mean |SHAP|':>12}")
 print("-" * 50)
 for rank, i in enumerate(importance_order):
     print(f"{rank+1:<4} {SHORT_NAMES[i]:<30} {mean_abs_shap[i]:>12.3f}")
 
 
-print("\n计算 SHAP 交互值（采样500）...")
+print("\ncomputing SHAP interaction values (sampling 500)...")
 idx_inter = rng.choice(len(X), 500, replace=False)
 X_inter = X[idx_inter]
 shap_interaction = explainer.shap_interaction_values(X_inter)
@@ -68,7 +68,7 @@ np.fill_diagonal(inter_matrix, 0)
 
 
 print("\n" + "=" * 60)
-print("SHAP 交互对 Top 5 —— 对应论文表10")
+print("Top 5 SHAP interaction pairs - corresponding to manuscript Table 10")
 print("=" * 60)
 pairs = []
 for i in range(len(FEATURE_COLS)):
@@ -76,7 +76,7 @@ for i in range(len(FEATURE_COLS)):
         pairs.append((i, j, inter_matrix[i, j]))
 pairs.sort(key=lambda x: x[2], reverse=True)
 
-print(f"{'排名':<4} {'特征对':<45} {'交互强度':>10}")
+print(f"{'rank':<4} {'feature pair':<45} {'interaction strength':>10}")
 print("-" * 62)
 for rank, (i, j, val) in enumerate(pairs[:5]):
     print(f"{rank+1:<4} {SHORT_NAMES[i]} × {SHORT_NAMES[j]:<30} {val:>10.3f}")
@@ -94,7 +94,7 @@ ax.set_title("SHAP Feature Interaction Matrix (ExtraTrees, Dataset D)", fontsize
 plt.tight_layout()
 fig.savefig(FIG_DIR / "step7_shap_interaction_matrix.png", dpi=300, bbox_inches="tight")
 plt.close()
-print(f"\n图已保存: {FIG_DIR / 'step7_shap_interaction_matrix.png'}")
+print(f"\nsaved figure: {FIG_DIR / 'step7_shap_interaction_matrix.png'}")
 
 
 fig2, ax2 = plt.subplots(figsize=(10, 7))
@@ -102,6 +102,6 @@ shap.summary_plot(shap_values, X_shap, feature_names=SHORT_NAMES, show=False)
 plt.tight_layout()
 plt.savefig(FIG_DIR / "step7_shap_summary.png", dpi=300, bbox_inches="tight")
 plt.close()
-print(f"图已保存: {FIG_DIR / 'step7_shap_summary.png'}")
+print(f"saved figure: {FIG_DIR / 'step7_shap_summary.png'}")
 
-print("\nSHAP 分析完成!")
+print("\nSHAP analysiscompleted!")

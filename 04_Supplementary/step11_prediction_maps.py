@@ -56,11 +56,11 @@ def base_map(ax, title, fontsize=12):
 
 
 print("=" * 60)
-print("加载观测数据...")
+print("loading observations...")
 df = pd.read_csv(DATA_PATH)
-print(f"  记录数: {len(df):,}  网格数: {df[['grid_lat','grid_lon']].drop_duplicates().shape[0]:,}")
+print(f"  records: {len(df):,}  grid cells: {df[['grid_lat','grid_lon']].drop_duplicates().shape[0]:,}")
 
-print("空间分组 2°×2° 划分训练/测试集...")
+print("splitting train/test sets with 2°x2° spatial blocks...")
 df["block_id"] = ((df["grid_lat"] // 2) * 2).astype(str) + "_" +\
                  ((df["grid_lon"] // 2) * 2).astype(str)
 valid_blocks = df["block_id"].value_counts()
@@ -74,10 +74,10 @@ test_blocks = set(blocks[:int(len(blocks) * 0.3)])
 
 train_df = df2[~df2["block_id"].isin(test_blocks)].copy()
 test_df  = df2[ df2["block_id"].isin(test_blocks)].copy()
-print(f"  训练集: {len(train_df):,}  测试集: {len(test_df):,}  blocks: {len(blocks)}")
+print(f"  training set: {len(train_df):,}  test set: {len(test_df):,}  blocks: {len(blocks)}")
 
 
-print("训练 ExtraTrees（空间分组训练集）...")
+print("training ExtraTrees on the spatial-block training set...")
 model_cv = ExtraTreesRegressor(n_estimators=100, max_depth=20, random_state=42, n_jobs=-1)
 model_cv.fit(train_df[FEATURE_COLS].values, train_df[TARGET].values)
 
@@ -87,33 +87,33 @@ test_df["residual"] = test_df["q_pred"] - test_df[TARGET]
 test_df["abs_resid"]= test_df["residual"].abs()
 
 r2, rmse, mae, bias = calc_metrics(test_df[TARGET], test_df["q_pred"])
-print(f"  测试集: R²={r2:.4f}  RMSE={rmse:.2f}  MAE={mae:.2f}  Bias={bias:.2f}")
+print(f"  test set: R²={r2:.4f}  RMSE={rmse:.2f}  MAE={mae:.2f}  Bias={bias:.2f}")
 
 
 save_cols = ["lat_NS", "long_EW", "grid_lat", "grid_lon", "basin", "qc_m",
              TARGET, "q_pred", "residual", "abs_resid"]
 test_df[save_cols].to_csv(OUT_DIR / "step11_test_predictions.csv", index=False)
-print(f"  已保存: outputs/step11_test_predictions.csv")
+print(f"  saved: outputs/step11_test_predictions.csv")
 
 
-print("全量训练 ExtraTrees（全部 28,642 条记录）...")
+print("training ExtraTrees on all 28,642 records...")
 model_full = ExtraTreesRegressor(n_estimators=100, max_depth=20, random_state=42, n_jobs=-1)
 model_full.fit(df[FEATURE_COLS].values, df[TARGET].values)
 
-print("加载全球网格特征文件...")
+print("loading global grid feature file...")
 globe = pd.read_csv(GLOBE_PATH, usecols=["lon", "lat"] + FEATURE_COLS)
 globe = globe.dropna(subset=FEATURE_COLS)
-print(f"  全球网格: {len(globe):,} 个")
+print(f"  global grid: {len(globe):,}")
 
 globe["q_pred"] = model_full.predict(globe[FEATURE_COLS].values)
 globe_out = globe[["lon", "lat", "q_pred"]].copy()
 globe_out.columns = ["lon", "lat", "q_pred_mWm2"]
 globe_out.to_csv(OUT_DIR / "step11_global_predictions.csv", index=False)
-print(f"  已保存: outputs/step11_global_predictions.csv")
-print(f"  预测值范围: {globe_out['q_pred_mWm2'].min():.1f} ~ {globe_out['q_pred_mWm2'].max():.1f} mW/m²")
+print(f"  saved: outputs/step11_global_predictions.csv")
+print(f"  prediction range: {globe_out['q_pred_mWm2'].min():.1f} ~ {globe_out['q_pred_mWm2'].max():.1f} mW/m²")
 
 
-print("\n绘制图1：全球海洋热流预测图...")
+print("\nplotting Figure 1: global marine heat-flow prediction map...")
 
 fig, ax = plt.subplots(figsize=(18, 9),
                        subplot_kw={"projection": ccrs.Robinson()})
@@ -137,14 +137,14 @@ cbar.ax.tick_params(labelsize=9)
 plt.tight_layout()
 fig.savefig(FIG_DIR / "step11_global_pred_map.png", dpi=200, bbox_inches="tight")
 plt.close(fig)
-print(f"  已保存: step11_global_pred_map.png")
+print(f"  saved: step11_global_pred_map.png")
 
 
-print("绘制图2：测试集预测值空间分布...")
+print("plotting Figure 2: spatial distribution of test-set predictions...")
 
 fig, ax = plt.subplots(figsize=(16, 8),
                        subplot_kw={"projection": ccrs.Robinson()})
-base_map(ax, f"Test Set — Predicted Heat Flow (2°×2° Spatial Block)\n"
+base_map(ax, f"Test Set  -  Predicted Heat Flow (2°×2° Spatial Block)\n"
              f"n={len(test_df):,}  R²={r2:.3f}  RMSE={rmse:.1f}  MAE={mae:.1f} mW/m²")
 
 sc2 = ax.scatter(
@@ -161,14 +161,14 @@ cbar2.ax.tick_params(labelsize=9)
 plt.tight_layout()
 fig.savefig(FIG_DIR / "step11_test_pred_map.png", dpi=200, bbox_inches="tight")
 plt.close(fig)
-print(f"  已保存: step11_test_pred_map.png")
+print(f"  saved: step11_test_pred_map.png")
 
 
-print("绘制图3：测试集残差空间分布...")
+print("plotting Figure 3: spatial distribution of test-set residuals...")
 
 fig, ax = plt.subplots(figsize=(16, 8),
                        subplot_kw={"projection": ccrs.Robinson()})
-base_map(ax, f"Test Set — Residuals (Predicted − Observed)\n"
+base_map(ax, f"Test Set  -  Residuals (Predicted − Observed)\n"
              f"Bias={bias:.2f} mW/m²  |  Red = overestimate, Blue = underestimate")
 
 norm_res = mcolors.TwoSlopeNorm(vmin=-80, vcenter=0, vmax=80)
@@ -186,10 +186,10 @@ cbar3.ax.tick_params(labelsize=9)
 plt.tight_layout()
 fig.savefig(FIG_DIR / "step11_test_residual_map.png", dpi=200, bbox_inches="tight")
 plt.close(fig)
-print(f"  已保存: step11_test_residual_map.png")
+print(f"  saved: step11_test_residual_map.png")
 
 
-print("绘制图4：各洋盆残差直方图...")
+print("plotting Figure 4: residual histograms by basin...")
 
 basins = ["Pacific", "Atlantic", "Indian"]
 basin_colors = {"Pacific": "#3a7ebf", "Atlantic": "#e06c3a", "Indian": "#4caf7d"}
@@ -223,10 +223,10 @@ plt.suptitle("Residual Distribution by Ocean Basin", fontsize=13, fontweight="bo
 plt.tight_layout()
 fig.savefig(FIG_DIR / "step11_basin_residual_hist.png", dpi=200, bbox_inches="tight")
 plt.close(fig)
-print(f"  已保存: step11_basin_residual_hist.png")
+print(f"  saved: step11_basin_residual_hist.png")
 
 
-print("绘制图5：大残差点空间分布（|residual| > 30）...")
+print("plotting Figure 5: spatial distribution of large residuals(|residual| > 30)...")
 
 large = test_df[test_df["abs_resid"] > 30].copy()
 small = test_df[test_df["abs_resid"] <= 30].copy()
@@ -287,10 +287,10 @@ ax.legend(loc="lower left", fontsize=9, framealpha=0.85,
 plt.tight_layout()
 fig.savefig(FIG_DIR / "step11_large_residual_map.png", dpi=200, bbox_inches="tight")
 plt.close(fig)
-print(f"  已保存: step11_large_residual_map.png")
+print(f"  saved: step11_large_residual_map.png")
 
 
-print("绘制图6：观测 vs 预测散点图...")
+print("plotting Figure 6: observed-versus-predicted scatter plot...")
 
 fig, ax = plt.subplots(figsize=(7, 7))
 
@@ -314,18 +314,18 @@ ax.spines[["top", "right"]].set_visible(False)
 plt.tight_layout()
 fig.savefig(FIG_DIR / "step11_scatter_obs_pred.png", dpi=200, bbox_inches="tight")
 plt.close(fig)
-print(f"  已保存: step11_scatter_obs_pred.png")
+print(f"  saved: step11_scatter_obs_pred.png")
 
 
 print()
 print("=" * 60)
-print("全部完成！输出文件：")
-print(f"  CSV  outputs/step11_global_predictions.csv   ({len(globe_out):,} 行)")
-print(f"  CSV  outputs/step11_test_predictions.csv     ({len(test_df):,} 行)")
-print(f"  图1  step11_global_pred_map.png")
-print(f"  图2  step11_test_pred_map.png")
-print(f"  图3  step11_test_residual_map.png")
-print(f"  图4  step11_basin_residual_hist.png")
-print(f"  图5  step11_large_residual_map.png")
-print(f"  图6  step11_scatter_obs_pred.png")
+print("all done! output files: ")
+print(f"  CSV  outputs/step11_global_predictions.csv   ({len(globe_out):,} rows)")
+print(f"  CSV  outputs/step11_test_predictions.csv     ({len(test_df):,} rows)")
+print(f"  Figure 1  step11_global_pred_map.png")
+print(f"  Figure 2  step11_test_pred_map.png")
+print(f"  Figure 3  step11_test_residual_map.png")
+print(f"  Figure 4  step11_basin_residual_hist.png")
+print(f"  Figure 5  step11_large_residual_map.png")
+print(f"  Figure 6  step11_scatter_obs_pred.png")
 print("=" * 60)

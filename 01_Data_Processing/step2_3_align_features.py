@@ -30,27 +30,27 @@ FEATURE_COLS = [
 
 
 print("=" * 55)
-print("Step 2: 特征对齐")
+print("Step 2: feature alignment")
 obs = pd.read_csv(OBS_PATH)
-print(f"  obs_grid 格点数: {len(obs):,}")
+print(f"  obs_grid grid cells: {len(obs):,}")
 
 feat = pd.read_csv(FEAT_PATH, usecols=["lon", "lat"] + FEATURE_COLS)
 feat["grid_lon"] = feat["lon"].round(2)
 feat["grid_lat"] = feat["lat"].round(2)
 feat = feat.drop(columns=["lon", "lat"])
 feat = feat.drop_duplicates(subset=["grid_lon", "grid_lat"])
-print(f"  特征数据行数: {len(feat):,}")
+print(f"  feature rows: {len(feat):,}")
 
 merged = obs.merge(feat, on=["grid_lon", "grid_lat"], how="left")
 n_feat_matched = merged[FEATURE_COLS[0]].notna().sum()
-print(f"  特征匹配成功: {n_feat_matched:,} / {len(merged):,} 格点")
+print(f"  feature matches succeeded: {n_feat_matched:,} / {len(merged):,} grid cells")
 n_feat_missing = len(merged) - n_feat_matched
 if n_feat_missing > 0:
-    print(f"  特征缺失格点: {n_feat_missing:,} (这些格点不在旧数据集覆盖范围内)")
+    print(f"  grid cells with missing features: {n_feat_missing:,} (these grid cells are outside the legacy dataset coverage)")
 
 
 print("\n" + "=" * 55)
-print("Step 3: 洋壳年龄提取 (Muller 2019, 0.1°)")
+print("Step 3: oceanic crust age extraction (Muller 2019, 0.1°)")
 
 f   = nc.Dataset(NC_PATH)
 nc_lon = np.array(f.variables["lon"][:])
@@ -82,7 +82,7 @@ def extract_age(grid_lon, grid_lat):
         return np.nan
     return float(np.median(valid))
 
-print(f"  提取 {len(merged):,} 个格点的洋壳年龄 ...")
+print(f"  extracting oceanic crust ages for {len(merged):,} grid cells ...")
 ages = []
 for idx, row in enumerate(merged.itertuples()):
     ages.append(extract_age(row.grid_lon, row.grid_lat))
@@ -93,15 +93,15 @@ merged["oceanic_crust_age_Ma"] = ages
 
 n_age_valid = merged["oceanic_crust_age_Ma"].notna().sum()
 n_age_nan   = merged["oceanic_crust_age_Ma"].isna().sum()
-print(f"  有洋壳年龄: {n_age_valid:,} ({n_age_valid/len(merged)*100:.1f}%)")
-print(f"  NaN(大陆架/无洋壳): {n_age_nan:,} ({n_age_nan/len(merged)*100:.1f}%)")
+print(f"  with oceanic crust age: {n_age_valid:,} ({n_age_valid/len(merged)*100:.1f}%)")
+print(f"  NaN(continental shelf/no oceanic crust): {n_age_nan:,} ({n_age_nan/len(merged)*100:.1f}%)")
 age_vals = merged["oceanic_crust_age_Ma"].dropna()
-print(f"  年龄范围: {age_vals.min():.1f} ~ {age_vals.max():.1f} Ma  "
-      f"中位数={age_vals.median():.1f} Ma")
+print(f"  age range: {age_vals.min():.1f} ~ {age_vals.max():.1f} Ma  "
+      f"median={age_vals.median():.1f} Ma")
 
 
 print("\n" + "=" * 55)
-print("各特征缺失统计:")
+print("missing values by feature:")
 all_feat_cols = FEATURE_COLS + ["oceanic_crust_age_Ma"]
 for col in all_feat_cols:
     n_nan = merged[col].isna().sum()
@@ -109,12 +109,12 @@ for col in all_feat_cols:
 
 
 complete_mask = merged[all_feat_cols].notna().all(axis=1)
-print(f"\n所有14个特征均完整的格点: {complete_mask.sum():,} / {len(merged):,}")
-print(f"至少有13个特征（允许洋壳年龄NaN）的格点: "
+print(f"\ngrid cells complete for all 14 features: {complete_mask.sum():,} / {len(merged):,}")
+print(f"grid cells with at least 13 features (allowing oceanic crust age NaN): "
       f"{merged[FEATURE_COLS].notna().all(axis=1).sum():,}")
 
 
 out_path = OUT_DIR / "dataset_with_features.csv"
 merged.to_csv(out_path, index=False)
-print(f"\n保存至: {out_path}")
-print(f"列: {list(merged.columns)}")
+print(f"\nsaved to: {out_path}")
+print(f"columns: {list(merged.columns)}")

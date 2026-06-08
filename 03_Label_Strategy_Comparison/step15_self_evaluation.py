@@ -42,13 +42,13 @@ TARGET = "q"
 METHOD_NAMES = ["A: Global Kriging", "B: Direct Obs", "C: Local Kriging"]
 METHOD_COLORS = ["#e06c3a", "#3a7ebf", "#4caf7d"]
 
-parser = argparse.ArgumentParser(description="Step15 自评估实验")
+parser = argparse.ArgumentParser(description="Step15 self-evaluation experiment")
 parser.add_argument("--split", choices=["spatial", "random"], default="spatial",
-                    help="训练/测试划分方式，默认 spatial")
+                    help="train/test split mode; default: spatial")
 args = parser.parse_args()
 
 SPLIT_MODE = args.split
-SPLIT_LABEL = "空间分组 2°×2°" if SPLIT_MODE == "spatial" else "随机划分 7:3"
+SPLIT_LABEL = "2°x2° spatial block split" if SPLIT_MODE == "spatial" else "random split 7:3"
 OUT_PREFIX = "step15" if SPLIT_MODE == "spatial" else "step15_random"
 
 
@@ -123,35 +123,35 @@ def chord_to_km(chord_dist):
 
 
 print("=" * 70)
-print("阶段0：数据准备")
+print("Stage 0: data preparation")
 print("=" * 70)
-print(f"  划分方式: {SPLIT_LABEL}")
+print(f"  split mode: {SPLIT_LABEL}")
 
 df = pd.read_csv(DATA_PATH).dropna(subset=FEATURE_COLS + [TARGET])
 df = df[df[TARGET] > 0].copy()
-print(f"  观测数据: {len(df):,} 条")
+print(f"  observations: {len(df):,}")
 
 
 kriging_grid = df.groupby(["grid_lat", "grid_lon"], as_index=False)[TARGET].median()
-print(f"  Kriging 支撑网格: {len(kriging_grid):,} 个")
+print(f"  Kriging support grid: {len(kriging_grid):,} ")
 
 globe = pd.read_csv(GLOBE_PATH, usecols=["lon", "lat"] + FEATURE_COLS)
 globe = globe.dropna(subset=FEATURE_COLS)
-print(f"  全球网格: {len(globe):,} 个")
+print(f"  global grid: {len(globe):,}")
 
 
 train_df_B, test_df_B = split_dataset(df, lat_col="grid_lat", lon_col="grid_lon")
-print(f"  方法B 训练集: {len(train_df_B):,}  测试集: {len(test_df_B):,}")
+print(f"  Method B training set: {len(train_df_B):,}  test set: {len(test_df_B):,}")
 
 
 results_all = {}
 
 
 print("\n" + "=" * 70)
-print("阶段1：方法A — 全局 Kriging 自评估")
+print("Stage 1: Method A  -  global Kriging self-evaluation")
 print("=" * 70)
 
-print("  用全部观测点做全局 Kriging...")
+print("  Running global Kriging with all observations...")
 t0 = time.time()
 ok_global = OrdinaryKriging(
     kriging_grid["grid_lon"].values,
@@ -172,17 +172,17 @@ z_global, _ = ok_global.execute(
     backend="loop",
 )
 z_global = np.asarray(z_global)
-print(f"  完成（耗时 {time.time()-t0:.1f}s）")
+print(f"  completed(elapsed {time.time()-t0:.1f}s)")
 
 
 globe_A = globe.copy()
 globe_A["q_label"] = z_global
 globe_A = globe_A.dropna(subset=["q_label"])
-print(f"  有效网格: {len(globe_A):,} 个")
+print(f"  valid grid cells: {len(globe_A):,} ")
 
 
 train_A, test_A = split_dataset(globe_A, lat_col="lat", lon_col="lon")
-print(f"  训练集: {len(train_A):,}  测试集: {len(test_A):,}")
+print(f"  training set: {len(train_A):,}  test set: {len(test_A):,}")
 
 
 X_train_A = train_A[FEATURE_COLS].values
@@ -214,7 +214,7 @@ print(f"  Moran's I={moran_A:.4f}")
 
 
 print("\n" + "=" * 70)
-print("阶段2：方法B — 真实观测自评估")
+print("Stage 2: Method B  -  observed-value self-evaluation")
 print("=" * 70)
 
 X_train_B = train_df_B[FEATURE_COLS].values
@@ -246,10 +246,10 @@ print(f"  Moran's I={moran_B:.4f}")
 
 
 print("\n" + "=" * 70)
-print("阶段3：方法C — 局部 Kriging 自评估")
+print("Stage 3: Method C  -  local Kriging self-evaluation")
 print("=" * 70)
 
-print("  用全部观测点做局部 Kriging...")
+print("  Running local Kriging with all observations...")
 t0 = time.time()
 
 
@@ -284,7 +284,7 @@ valid_count = 0
 
 for i in range(len(globe)):
     if i % 20000 == 0:
-        print(f"    进度: {i}/{len(globe):,}")
+        print(f"    progress: {i}/{len(globe):,}")
 
     if dist_km_all[i] > D_MAX_KM:
         continue
@@ -317,17 +317,17 @@ for i in range(len(globe)):
         except Exception:
             pass
 
-print(f"  完成（耗时 {time.time()-t0:.1f}s，有效网格 {valid_count:,}）")
+print(f"  completed(elapsed {time.time()-t0:.1f}s, valid grid cells {valid_count:,})")
 
 
 globe_C = globe.copy()
 globe_C["q_label"] = z_local
 globe_C = globe_C.dropna(subset=["q_label"])
-print(f"  有效网格: {len(globe_C):,} 个")
+print(f"  valid grid cells: {len(globe_C):,} ")
 
 
 train_C, test_C = split_dataset(globe_C, lat_col="lat", lon_col="lon")
-print(f"  训练集: {len(train_C):,}  测试集: {len(test_C):,}")
+print(f"  training set: {len(train_C):,}  test set: {len(test_C):,}")
 
 
 X_train_C = train_C[FEATURE_COLS].values
@@ -359,10 +359,10 @@ print(f"  Moran's I={moran_C:.4f}")
 
 
 print("\n" + "=" * 70)
-print("阶段4：汇总评估")
+print("Stage 4: summary evaluation")
 print("=" * 70)
 
-print(f"\n{'方法':<25} {'Ground Truth':<15} {'R²':>8} {'RMSE':>8} {'MAE':>8} {'Bias':>8} {'Moran I':>8}")
+print(f"\n{'method':<25} {'Ground Truth':<15} {'R²':>8} {'RMSE':>8} {'MAE':>8} {'Bias':>8} {'Moran I':>8}")
 print("-" * 85)
 for key, name in zip(["A", "B", "C"], METHOD_NAMES):
     r = results_all[key]
@@ -389,15 +389,15 @@ for key, name in zip(["A", "B", "C"], METHOD_NAMES):
 summary_df = pd.DataFrame(summary_data)
 summary_name = f"{OUT_PREFIX}_self_eval_summary.csv"
 summary_df.to_csv(OUT_DIR / summary_name, index=False)
-print(f"\n已保存: outputs/{summary_name}")
+print(f"\nsaved: outputs/{summary_name}")
 
 
 print("\n" + "=" * 70)
-print("阶段5：可视化")
+print("Stage 5: visualization")
 print("=" * 70)
 
 
-print("绘制图1：三种方法散点图...")
+print("plotting Figure 1: scatter plots for the three methods...")
 fig, axes = plt.subplots(1, 3, figsize=(16, 5))
 
 for idx, (key, name, color) in enumerate(zip(["A", "B", "C"], METHOD_NAMES, METHOD_COLORS)):
@@ -426,10 +426,10 @@ plt.tight_layout()
 scatter_name = f"{OUT_PREFIX}_scatter_3methods.png"
 fig.savefig(FIG_DIR / scatter_name, dpi=200, bbox_inches="tight")
 plt.close(fig)
-print(f"  已保存: {scatter_name}")
+print(f"  saved: {scatter_name}")
 
 
-print("绘制图2：残差直方图...")
+print("plotting Figure 2: residual histogram...")
 fig, axes = plt.subplots(1, 3, figsize=(16, 5))
 
 for idx, (key, name, color) in enumerate(zip(["A", "B", "C"], METHOD_NAMES, METHOD_COLORS)):
@@ -454,12 +454,12 @@ plt.tight_layout()
 resid_name = f"{OUT_PREFIX}_residual_hist_3methods.png"
 fig.savefig(FIG_DIR / resid_name, dpi=200, bbox_inches="tight")
 plt.close(fig)
-print(f"  已保存: {resid_name}")
+print(f"  saved: {resid_name}")
 
 compare_name = None
 if SPLIT_MODE == "spatial":
 
-    print("绘制图3：与 step14 对比...")
+    print("plotting Figure 3: comparison with step14...")
 
 
     step14_df = pd.read_csv(OUT_DIR / "step14_comparison_summary.csv")
@@ -514,17 +514,17 @@ if SPLIT_MODE == "spatial":
     compare_name = f"{OUT_PREFIX}_vs_step14_comparison.png"
     fig.savefig(FIG_DIR / compare_name, dpi=200, bbox_inches="tight")
     plt.close(fig)
-    print(f"  已保存: {compare_name}")
+    print(f"  saved: {compare_name}")
 else:
-    print("跳过图3：随机划分版本不与 step14 空间分组结果直接对比")
+    print("skipped Figure 3: the random-split version is not directly compared with the step14 spatial-block results")
 
 
 print()
 print("=" * 70)
-print("全部完成！输出文件：")
+print("all done! output files: ")
 print(f"  CSV   outputs/{summary_name}")
-print(f"  图1   {scatter_name}        — 三种方法散点图")
-print(f"  图2   {resid_name}  — 残差直方图")
+print(f"  Figure 1   {scatter_name}         -  scatter plots for the three methods")
+print(f"  Figure 2   {resid_name}   -  residual histogram")
 if compare_name is not None:
-    print(f"  图3   {compare_name}    — 与 step14 对比")
+    print(f"  Figure 3   {compare_name}     -  comparison with step14")
 print("=" * 70)

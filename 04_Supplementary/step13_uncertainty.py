@@ -71,23 +71,23 @@ def base_map(ax, title, fontsize=12):
 
 
 print("=" * 65)
-print("加载数据...")
+print("loading data...")
 df = pd.read_csv(DATA_PATH).dropna(subset=FEATURE_COLS + [TARGET])
-print(f"  记录数: {len(df):,}")
+print(f"  records: {len(df):,}")
 
 train_df, test_df = spatial_block_split(df)
-print(f"  训练集: {len(train_df):,}  测试集: {len(test_df):,}")
+print(f"  training set: {len(train_df):,}  test set: {len(test_df):,}")
 
 X_train = train_df[FEATURE_COLS].values
 X_test  = test_df[FEATURE_COLS].values
 y_test  = test_df[TARGET].values
 
 
-print("\n训练 ExtraTrees（n_estimators=300）...")
+print("\ntraining ExtraTrees (n_estimators=300)...")
 model_cv = ExtraTreesRegressor(n_estimators=300, max_depth=20, random_state=42, n_jobs=-1)
 model_cv.fit(X_train, train_df[TARGET].values)
 
-print("计算测试集预测均值和不确定性...")
+print("computing test-set prediction means and uncertainty...")
 mean_pred, std_pred = predict_with_uncertainty(model_cv, X_test)
 
 
@@ -96,8 +96,8 @@ rmse = float(np.sqrt(mean_squared_error(y_test, mean_pred)))
 mae  = float(mean_absolute_error(y_test, mean_pred))
 bias = float(np.mean(mean_pred - y_test))
 abs_error = np.abs(mean_pred - y_test)
-print(f"  测试集: R²={r2:.4f}  RMSE={rmse:.2f}  MAE={mae:.2f}  Bias={bias:.2f}")
-print(f"  不确定性(std): 均值={std_pred.mean():.2f}  中位数={np.median(std_pred):.2f}  "
+print(f"  test set: R²={r2:.4f}  RMSE={rmse:.2f}  MAE={mae:.2f}  Bias={bias:.2f}")
+print(f"  uncertainty (std): mean={std_pred.mean():.2f}  median={np.median(std_pred):.2f}  "
       f"P95={np.percentile(std_pred, 95):.2f} mW/m²")
 
 
@@ -107,28 +107,28 @@ test_out["q_uncertainty"] = std_pred
 test_out["abs_error"]    = abs_error
 test_out["residual"]     = mean_pred - y_test
 test_out.to_csv(OUT_DIR / "step13_test_uncertainty.csv", index=False)
-print(f"  已保存: outputs/step13_test_uncertainty.csv")
+print(f"  saved: outputs/step13_test_uncertainty.csv")
 
 
-print("\n全量训练（全部数据）...")
+print("\nfull training on all data...")
 model_full = ExtraTreesRegressor(n_estimators=300, max_depth=20, random_state=42, n_jobs=-1)
 model_full.fit(df[FEATURE_COLS].values, df[TARGET].values)
 
-print("加载全球网格，计算全球不确定性（可能需要几分钟）...")
+print("loading global grid and computing global uncertainty (this may take several minutes)...")
 globe = pd.read_csv(GLOBE_PATH, usecols=["lon", "lat"] + FEATURE_COLS)
 globe = globe.dropna(subset=FEATURE_COLS)
-print(f"  全球网格: {len(globe):,} 个")
+print(f"  global grid: {len(globe):,}")
 
 globe_mean, globe_std = predict_with_uncertainty(model_full, globe[FEATURE_COLS].values)
 globe_out = globe[["lon", "lat"]].copy()
 globe_out["q_pred_mWm2"]       = globe_mean
 globe_out["q_uncertainty_mWm2"] = globe_std
 globe_out.to_csv(OUT_DIR / "step13_global_uncertainty.csv", index=False)
-print(f"  已保存: outputs/step13_global_uncertainty.csv")
-print(f"  全球不确定性: 均值={globe_std.mean():.2f}  P95={np.percentile(globe_std, 95):.2f} mW/m²")
+print(f"  saved: outputs/step13_global_uncertainty.csv")
+print(f"  global uncertainty: mean={globe_std.mean():.2f}  P95={np.percentile(globe_std, 95):.2f} mW/m²")
 
 
-print("\n绘制图1：全球不确定性空间分布...")
+print("\nplotting Figure 1: spatial distribution of global uncertainty...")
 
 fig, axes = plt.subplots(2, 1, figsize=(18, 14),
                          subplot_kw={"projection": ccrs.Robinson()})
@@ -163,10 +163,10 @@ cb1.set_label("Uncertainty 1σ (mW/m²)", fontsize=11)
 plt.tight_layout()
 fig.savefig(FIG_DIR / "step13_uncertainty_map.png", dpi=200, bbox_inches="tight")
 plt.close(fig)
-print("  已保存: step13_uncertainty_map.png")
+print("  saved: step13_uncertainty_map.png")
 
 
-print("绘制图2：测试集不确定性空间分布...")
+print("plotting Figure 2: spatial distribution of test-set uncertainty...")
 
 fig, ax = plt.subplots(figsize=(16, 8),
                        subplot_kw={"projection": ccrs.Robinson()})
@@ -187,10 +187,10 @@ cb2.set_label("Uncertainty 1σ (mW/m²)", fontsize=11)
 plt.tight_layout()
 fig.savefig(FIG_DIR / "step13_test_uncertainty_map.png", dpi=200, bbox_inches="tight")
 plt.close(fig)
-print("  已保存: step13_test_uncertainty_map.png")
+print("  saved: step13_test_uncertainty_map.png")
 
 
-print("绘制图3：不确定性 vs 实际误差...")
+print("plotting Figure 3: uncertainty versus actual error...")
 
 fig, axes = plt.subplots(1, 2, figsize=(13, 5))
 
@@ -253,16 +253,16 @@ ax.spines[["top", "right"]].set_visible(False)
 
 for k_target in [1.0, 1.645, 2.0]:
     idx = np.argmin(np.abs(k_values - k_target))
-    print(f"  k={k_target:.3f}: 实际覆盖率={coverage[idx]:.3f}  理想={ideal_coverage[idx]:.3f}")
+    print(f"  k={k_target:.3f}: empirical coverage={coverage[idx]:.3f}  ideal={ideal_coverage[idx]:.3f}")
 
 plt.suptitle("Uncertainty Quality Assessment", fontsize=13, fontweight="bold")
 plt.tight_layout()
 fig.savefig(FIG_DIR / "step13_uncertainty_vs_error.png", dpi=200, bbox_inches="tight")
 plt.close(fig)
-print("  已保存: step13_uncertainty_vs_error.png")
+print("  saved: step13_uncertainty_vs_error.png")
 
 
-print("绘制图4：各洋盆不确定性分布...")
+print("plotting Figure 4: uncertainty distributions by basin...")
 
 basins = ["Pacific", "Atlantic", "Indian"]
 colors = {"Pacific": "#3a7ebf", "Atlantic": "#e06c3a", "Indian": "#4caf7d"}
@@ -292,21 +292,21 @@ for i, basin in enumerate(basins):
     ax.spines[["top", "right"]].set_visible(False)
 
 plt.suptitle("Prediction Uncertainty Distribution by Ocean Basin\n"
-             "(dashed = mean σ,  red = MAE — ideally σ ≈ MAE)",
+             "(dashed = mean σ,  red = MAE  -  ideally σ ≈ MAE)",
              fontsize=12, fontweight="bold")
 plt.tight_layout()
 fig.savefig(FIG_DIR / "step13_basin_uncertainty.png", dpi=200, bbox_inches="tight")
 plt.close(fig)
-print("  已保存: step13_basin_uncertainty.png")
+print("  saved: step13_basin_uncertainty.png")
 
 
 print()
 print("=" * 65)
-print("全部完成！输出文件：")
-print(f"  CSV  outputs/step13_test_uncertainty.csv    ({len(test_df):,} 行)")
-print(f"  CSV  outputs/step13_global_uncertainty.csv  ({len(globe_out):,} 行)")
-print(f"  图1  step13_uncertainty_map.png         — 全球预测值 + 不确定性双图")
-print(f"  图2  step13_test_uncertainty_map.png    — 测试集不确定性空间分布")
-print(f"  图3  step13_uncertainty_vs_error.png    — 不确定性 vs 误差 + 校准曲线")
-print(f"  图4  step13_basin_uncertainty.png       — 各洋盆不确定性分布")
+print("all done! output files: ")
+print(f"  CSV  outputs/step13_test_uncertainty.csv    ({len(test_df):,} rows)")
+print(f"  CSV  outputs/step13_global_uncertainty.csv  ({len(globe_out):,} rows)")
+print(f"  Figure 1  step13_uncertainty_map.png          -  global prediction and uncertainty two-panel map")
+print(f"  Figure 2  step13_test_uncertainty_map.png     -  spatial distribution of test-set uncertainty")
+print(f"  Figure 3  step13_uncertainty_vs_error.png     -  uncertainty versus error plus calibration curve")
+print(f"  Figure 4  step13_basin_uncertainty.png        -  uncertainty distributions by basin")
 print("=" * 65)

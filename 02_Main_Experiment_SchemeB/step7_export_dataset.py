@@ -91,5 +91,5 @@ df["basin"] = df.apply(lambda r: assign_basin(r["grid_lon"], r["grid_lat"]), axi
 
 out_cols = ["q", "lat_NS", "long_EW", "grid_lat", "grid_lon"] + FEATURE_COLS + ["oceanic_crust_age_Ma", "basin", "qc_u", "qc_m"]
 df[out_cols].to_csv(OUT_PATH, index=False)
-print(f"导出完成: {OUT_PATH}")
-print(f"  记录数: {len(df):,}, 网格数: {df[['grid_lat','grid_lon']].drop_duplicates().shape[0]:,}")
+print(f"export completed: {OUT_PATH}")
+print(f"  records: {len(df):,}, grid cells: {df[['grid_lat','grid_lon']].drop_duplicates().shape[0]:,}")

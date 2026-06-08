@@ -77,16 +77,16 @@ def calc_moran_knn(coords, values, k=8):
 
 
 print("=" * 72)
-print("W1 控制实验：标签对比公平性验证")
+print("W1 control experiment: fairness check for label comparison")
 print("=" * 72)
 
 df = pd.read_csv(DATA_PATH).dropna(subset=FEATURE_COLS + [TARGET])
 df = df[df[TARGET] > 0].copy()
-print(f"  观测数据: {len(df):,} 条")
+print(f"  observations: {len(df):,}")
 
 
 train_df, test_df = spatial_block_split(df)
-print(f"  训练集: {len(train_df):,}  测试集: {len(test_df):,}")
+print(f"  training set: {len(train_df):,}  test set: {len(test_df):,}")
 
 X_test = test_df[FEATURE_COLS].values
 y_test = test_df[TARGET].values
@@ -106,12 +106,12 @@ all_metrics = {}
 
 
 print("\n" + "=" * 72)
-print("阶段1：方案B — 真实观测直接预测（基线）")
+print("Stage 1: Scheme B  -  direct prediction from observed values (baseline)")
 print("=" * 72)
 
 X_train_B = train_df[FEATURE_COLS].values
 y_train_B = train_df[TARGET].values
-print(f"  方案B训练集: {len(train_df):,} 条真实观测")
+print(f"  Scheme B training set: {len(train_df):,} observed values")
 
 model_B = ExtraTreesRegressor(n_estimators=200, max_depth=20,
                                random_state=42, n_jobs=-1)
@@ -119,21 +119,21 @@ model_B.fit(X_train_B, y_train_B)
 pred_B = model_B.predict(X_test)
 all_preds["B"] = pred_B
 all_metrics["B"] = calc_metrics(y_test, pred_B)
-print(f"  测试集: R²={all_metrics['B']['R2']:.4f}  "
+print(f"  test set: R²={all_metrics['B']['R2']:.4f}  "
       f"RMSE={all_metrics['B']['RMSE']:.2f}  "
       f"MAE={all_metrics['B']['MAE']:.2f}  "
       f"Bias={all_metrics['B']['Bias']:.2f}")
 
 
 print("\n" + "=" * 72)
-print("阶段2：方案A' — 同位置全局Kriging标签（控制组）")
-print("  关键区别：训练样本位置与方案B完全一致，仅替换标签")
+print("Stage 2: Scheme A'  -  same-location global Kriging labels (control group)")
+print("  Key difference: training-sample locations are identical to Scheme B; only the labels are replaced")
 print("=" * 72)
 
 from pykrige.ok import OrdinaryKriging
 
 
-print(f"  Kriging 拟合输入点数: {len(train_grid):,}（训练集网格中位数）")
+print(f"  Kriging fitting input points: {len(train_grid):,} (training-grid medians)")
 
 t0 = time.time()
 ok_global = OrdinaryKriging(
@@ -147,7 +147,7 @@ ok_global = OrdinaryKriging(
 )
 
 
-print("  在训练集观测点位置执行 Kriging 插值（n_closest_points=50）...")
+print("  Running Kriging interpolation at training observation locations (n_closest_points=50)...")
 z_train_A, _ = ok_global.execute(
     "points",
     train_lon,
@@ -160,12 +160,12 @@ z_train_A = np.asarray(z_train_A).ravel()
 
 bad_A = ~np.isfinite(z_train_A) | (z_train_A < 0) | (z_train_A > 500)
 n_bad_A = bad_A.sum()
-print(f"  Kriging 完成: {time.time()-t0:.1f}s  "
-      f"不合理值: {n_bad_A:,}/{len(z_train_A):,}")
+print(f"  Kriging completed: {time.time()-t0:.1f}s  "
+      f"invalid values: {n_bad_A:,}/{len(z_train_A):,}")
 
 
 z_train_A[bad_A] = train_q[bad_A]
-print(f"  方案A'训练集: {len(z_train_A):,} 条（同位置Kriging标签）")
+print(f"  Scheme A' training set: {len(z_train_A):,} (same-location Kriging labels)")
 
 
 model_A_ctrl = ExtraTreesRegressor(n_estimators=200, max_depth=20,
@@ -175,15 +175,15 @@ pred_A_ctrl = model_A_ctrl.predict(X_test)
 all_preds["A'"] = pred_A_ctrl
 all_metrics["A'"] = calc_metrics(y_test, pred_A_ctrl)
 m_Ac = all_metrics["A'"]
-print(f"  测试集: R²={m_Ac['R2']:.4f}  "
+print(f"  test set: R²={m_Ac['R2']:.4f}  "
       f"RMSE={m_Ac['RMSE']:.2f}  "
       f"MAE={m_Ac['MAE']:.2f}  "
       f"Bias={m_Ac['Bias']:.2f}")
 
 
 print("\n" + "=" * 72)
-print("阶段3：方案C' — 同位置局部Kriging标签（控制组）")
-print("  关键区别：训练样本位置与方案B完全一致，仅替换标签")
+print("Stage 3: Scheme C'  -  same-location local Kriging labels (control group)")
+print("  Key difference: training-sample locations are identical to Scheme B; only the labels are replaced")
 print("=" * 72)
 
 WINDOW_DEG = 6.0
@@ -218,9 +218,9 @@ for i in range(len(train_df)):
         if n_done % 5000 == 0:
             elapsed = time.time() - t0
             n_filled = np.isfinite(z_train_C).sum()
-            print(f"    进度: {n_done:,}/{len(train_df):,}  "
+            print(f"    progress: {n_done:,}/{len(train_df):,}  "
                   f"filled={n_filled:,}  fallback={n_fallback:,}  "
-                  f"耗时={elapsed:.0f}s")
+                  f"elapsed={elapsed:.0f}s")
         continue
 
     try:
@@ -249,13 +249,13 @@ for i in range(len(train_df)):
     if n_done % 5000 == 0:
         elapsed = time.time() - t0
         n_filled = np.isfinite(z_train_C).sum()
-        print(f"    进度: {n_done:,}/{len(train_df):,}  "
+        print(f"    progress: {n_done:,}/{len(train_df):,}  "
               f"filled={n_filled:,}  fallback={n_fallback:,}  "
-              f"耗时={elapsed:.0f}s")
+              f"elapsed={elapsed:.0f}s")
 
-print(f"  局部Kriging完成: {time.time()-t0:.1f}s  "
-      f"回退到真实值: {n_fallback:,}/{len(train_df):,}")
-print(f"  方案C'训练集: {len(z_train_C):,} 条（同位置局部Kriging标签）")
+print(f"  local Kriging completed: {time.time()-t0:.1f}s  "
+      f"fallbacks to observed values: {n_fallback:,}/{len(train_df):,}")
+print(f"  Scheme C' training set: {len(z_train_C):,} (same-location local Kriging labels)")
 
 
 model_C_ctrl = ExtraTreesRegressor(n_estimators=200, max_depth=20,
@@ -265,14 +265,14 @@ pred_C_ctrl = model_C_ctrl.predict(X_test)
 all_preds["C'"] = pred_C_ctrl
 all_metrics["C'"] = calc_metrics(y_test, pred_C_ctrl)
 m_Cc = all_metrics["C'"]
-print(f"  测试集: R²={m_Cc['R2']:.4f}  "
+print(f"  test set: R²={m_Cc['R2']:.4f}  "
       f"RMSE={m_Cc['RMSE']:.2f}  "
       f"MAE={m_Cc['MAE']:.2f}  "
       f"Bias={m_Cc['Bias']:.2f}")
 
 
 print("\n" + "=" * 72)
-print("阶段4：统一评估与对比")
+print("Stage 4: unified evaluation and comparison")
 print("=" * 72)
 
 
@@ -313,7 +313,7 @@ METHOD_NAMES = {
     "C'": "C': Same-loc Local Kriging",
 }
 
-print(f"\n{'方案':<30} {'R²':>8} {'RMSE':>8} {'MAE':>8} "
+print(f"\n{'scheme':<30} {'R²':>8} {'RMSE':>8} {'MAE':>8} "
       f"{'Bias':>8} {'Moran I':>8}")
 print("-" * 78)
 for key in METHOD_KEYS:
@@ -322,40 +322,40 @@ for key in METHOD_KEYS:
     print(f"  {METHOD_NAMES[key]:<28} {m['R2']:>8.4f} {m['RMSE']:>8.2f} "
           f"{m['MAE']:>8.2f} {m['Bias']:>8.2f} {mi:>8.4f}")
 
-print(f"\n标签质量诊断（训练集标签 vs 真实观测）:")
-print(f"{'方案':<30} {'Label Bias':>12} {'Label MAE':>12} {'Label Corr':>12}")
+print(f"\nLabel-quality diagnostics (training labels vs observed values):")
+print(f"{'scheme':<30} {'Label Bias':>12} {'Label MAE':>12} {'Label Corr':>12}")
 print("-" * 68)
 for key in ["A'", "C'"]:
     ls = label_stats[key]
     print(f"  {METHOD_NAMES[key]:<28} {ls['label_bias']:>12.2f} "
           f"{ls['label_mae']:>12.2f} {ls['label_corr']:>12.4f}")
 
-print(f"\n原始实验 vs 控制实验对比:")
-print(f"{'对比项':<35} {'原始 R²':>10} {'控制 R²':>10} {'ΔR²':>10} {'结论':>20}")
+print(f"\nOriginal versus controlled experiment comparison:")
+print(f"{'comparison item':<35} {'original R²':>10} {'controlled R²':>10} {'ΔR²':>10} {'conclusion':>20}")
 print("-" * 90)
 for orig_key, ctrl_key in [("A", "A'"), ("C", "C'")]:
     r2_orig = ORIGINAL[orig_key]["R2"]
     r2_ctrl = all_metrics[ctrl_key]["R2"]
     delta = r2_ctrl - r2_orig
     if r2_ctrl < all_metrics["B"]["R2"]:
-        conclusion = "标签质量确有影响"
+        conclusion = "label quality has a clear effect"
     else:
-        conclusion = "需重新评估"
+        conclusion = "requires reassessment"
     print(f"  {orig_key} → {ctrl_key:<30} {r2_orig:>10.4f} {r2_ctrl:>10.4f} "
           f"{delta:>+10.4f} {conclusion:>20}")
 
 r2_B = all_metrics["B"]["R2"]
 r2_Ac = all_metrics["A'"]["R2"]
 r2_Cc = all_metrics["C'"]["R2"]
-print(f"\n核心结论:")
-print(f"  方案B R² = {r2_B:.4f}")
-print(f"  方案A'R² = {r2_Ac:.4f}  (ΔR² vs B = {r2_Ac - r2_B:+.4f})")
-print(f"  方案C'R² = {r2_Cc:.4f}  (ΔR² vs B = {r2_Cc - r2_B:+.4f})")
+print(f"\ncore conclusion:")
+print(f"  Scheme B R² = {r2_B:.4f}")
+print(f"  Scheme A'R² = {r2_Ac:.4f}  (ΔR² vs B = {r2_Ac - r2_B:+.4f})")
+print(f"  Scheme C'R² = {r2_Cc:.4f}  (ΔR² vs B = {r2_Cc - r2_B:+.4f})")
 if r2_B > r2_Ac and r2_B > r2_Cc:
-    print("  → 在控制样本分布后，方案B仍然显著优于A'和C'，")
-    print("    证明标签质量本身（而非样本分布差异）是性能差异的主要来源。")
+    print("  → After controlling the sample distribution, Scheme B still substantially outperforms Schemes A' and C',")
+    print("    showing that label quality itself, rather than sample-distribution differences, is the main source of the performance gap.")
 else:
-    print("  → 控制样本分布后差距缩小，需在论文中调整结论表述强度。")
+    print("  → After controlling the sample distribution, the gap narrows; the conclusion strength should be adjusted in the manuscript.")
 
 
 rows = []
@@ -368,17 +368,17 @@ for key in METHOD_KEYS:
 summary_df = pd.DataFrame(rows)
 csv_path = OUT_DIR / "step16_W1_fairness_summary.csv"
 summary_df.to_csv(csv_path, index=False)
-print(f"\n已保存: {csv_path}")
+print(f"\nsaved: {csv_path}")
 
 
 print("\n" + "=" * 72)
-print("阶段5：可视化")
+print("Stage 5: visualization")
 print("=" * 72)
 
 COLORS = {"B": "#3a7ebf", "A'": "#e06c3a", "C'": "#4caf7d"}
 
 
-print("绘制图1：控制实验散点图对比...")
+print("plotting Figure 1: controlled-experiment scatter comparison...")
 fig, axes = plt.subplots(1, 3, figsize=(18, 5.5))
 
 for col, key in enumerate(METHOD_KEYS):
@@ -399,16 +399,16 @@ for col, key in enumerate(METHOD_KEYS):
     ax.legend(fontsize=8)
     ax.spines[["top", "right"]].set_visible(False)
 
-plt.suptitle("W1 Controlled Experiment — Same Location, Different Labels",
+plt.suptitle("W1 Controlled Experiment  -  Same Location, Different Labels",
              fontsize=13, fontweight="bold")
 plt.tight_layout()
 fig.savefig(FIG_DIR / "step16_W1_scatter_controlled.png",
             dpi=200, bbox_inches="tight")
 plt.close(fig)
-print("  已保存: step16_W1_scatter_controlled.png")
+print("  saved: step16_W1_scatter_controlled.png")
 
 
-print("绘制图2：残差直方图...")
+print("plotting Figure 2: residual histogram...")
 fig, ax = plt.subplots(figsize=(10, 6))
 bins_hist = np.linspace(-150, 150, 80)
 
@@ -422,7 +422,7 @@ for key in METHOD_KEYS:
 ax.axvline(0, color="black", linewidth=1.5, linestyle="--")
 ax.set_xlabel("Residual (mW/m²)", fontsize=12)
 ax.set_ylabel("Count", fontsize=12)
-ax.set_title("W1 Controlled Experiment — Residual Distribution",
+ax.set_title("W1 Controlled Experiment  -  Residual Distribution",
              fontsize=13, fontweight="bold")
 ax.legend(fontsize=9)
 ax.spines[["top", "right"]].set_visible(False)
@@ -430,10 +430,10 @@ plt.tight_layout()
 fig.savefig(FIG_DIR / "step16_W1_residual_hist_controlled.png",
             dpi=200, bbox_inches="tight")
 plt.close(fig)
-print("  已保存: step16_W1_residual_hist_controlled.png")
+print("  saved: step16_W1_residual_hist_controlled.png")
 
 
-print("绘制图3：原始 vs 控制实验对比...")
+print("plotting Figure 3: original versus controlled experiment comparison...")
 fig, axes = plt.subplots(1, 2, figsize=(14, 6))
 
 
@@ -486,13 +486,13 @@ plt.tight_layout()
 fig.savefig(FIG_DIR / "step16_W1_bar_comparison.png",
             dpi=200, bbox_inches="tight")
 plt.close(fig)
-print("  已保存: step16_W1_bar_comparison.png")
+print("  saved: step16_W1_bar_comparison.png")
 
 
 print("\n" + "=" * 72)
-print("W1 控制实验全部完成！")
+print("W1 control experiment all done!")
 print(f"  CSV   {csv_path}")
-print(f"  图1   step16_W1_scatter_controlled.png")
-print(f"  图2   step16_W1_residual_hist_controlled.png")
-print(f"  图3   step16_W1_bar_comparison.png")
+print(f"  Figure 1   step16_W1_scatter_controlled.png")
+print(f"  Figure 2   step16_W1_residual_hist_controlled.png")
+print(f"  Figure 3   step16_W1_bar_comparison.png")
 print("=" * 72)

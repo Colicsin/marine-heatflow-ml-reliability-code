@@ -33,20 +33,20 @@ FEATURE_COLS = [
 
 
 df = pd.read_csv(DATA_PATH)
-print(f"原始格点数: {len(df):,}")
+print(f"raw grid cells: {len(df):,}")
 
 
 base_cols = FEATURE_COLS[:-1]
 df = df.dropna(subset=base_cols).copy()
-print(f"丢弃特征缺失格点后: {len(df):,}")
+print(f"after dropping grid cells with missing features: {len(df):,}")
 
 
 n_age_nan = df["oceanic_crust_age_Ma"].isna().sum()
 df["oceanic_crust_age_Ma"] = df["oceanic_crust_age_Ma"].fillna(-1.0)
-print(f"洋壳年龄NaN填-1: {n_age_nan:,} 个格点")
+print(f"oceanic crust age NaN filled with -1: {n_age_nan:,} grid cells")
 
 
-assert df[FEATURE_COLS].isna().sum().sum() == 0, "仍有缺失值！"
+assert df[FEATURE_COLS].isna().sum().sum() == 0, "missing values remain!"
 assert df["median_q"].isna().sum() == 0
 
 
@@ -66,22 +66,22 @@ def assign_basin(lon, lat):
 if "basin" not in df.columns:
     df["basin"] = [assign_basin(r.grid_lon, r.grid_lat) for r in df.itertuples()]
 
-print(f"\n最终数据集: {len(df):,} 个格点，{len(FEATURE_COLS)} 个特征")
-print(f"热流值: {df['median_q'].min():.1f} ~ {df['median_q'].max():.1f} mW/m²  "
-      f"均值={df['median_q'].mean():.1f}  std={df['median_q'].std():.1f}")
-print(f"\n洋盆分布:")
+print(f"\nfinal dataset: {len(df):,} grid cells, {len(FEATURE_COLS)} feature")
+print(f"heat flow: {df['median_q'].min():.1f} ~ {df['median_q'].max():.1f} mW/m²  "
+      f"mean={df['median_q'].mean():.1f}  std={df['median_q'].std():.1f}")
+print(f"\nbasin distribution:")
 print(df["basin"].value_counts().to_string())
-print(f"\n洋壳年龄分布:")
-print(f"  有洋壳年龄(>0): {(df['oceanic_crust_age_Ma']>0).sum():,}")
-print(f"  大陆架(-1):     {(df['oceanic_crust_age_Ma']==-1).sum():,}")
+print(f"\noceanic crust age distribution:")
+print(f"  with oceanic crust age(>0): {(df['oceanic_crust_age_Ma']>0).sum():,}")
+print(f"  continental shelf (-1):     {(df['oceanic_crust_age_Ma']==-1).sum():,}")
 
 
 out_path = OUT_DIR / "final_dataset.csv"
 df.to_csv(out_path, index=False)
-print(f"\n保存至: {out_path}")
+print(f"\nsaved to: {out_path}")
 
 
-print("\n生成可视化...")
+print("\ngenerating visualizations...")
 world = gpd.read_file(NE10_PATH)
 fig = plt.figure(figsize=(22, 18))
 fig.patch.set_facecolor('#0d1117')
@@ -99,7 +99,7 @@ cbar.set_label("Heat Flow (mW/m²)", color="white", fontsize=10)
 cbar.ax.yaxis.set_tick_params(color="white")
 plt.setp(cbar.ax.yaxis.get_ticklabels(), color="white")
 ax1.set_xlim(-180, 180); ax1.set_ylim(-90, 90)
-ax1.set_title(f"Final Dataset — {len(df):,} grid cells (0.5°×0.5°) with real observations",
+ax1.set_title(f"Final Dataset  -  {len(df):,} grid cells (0.5°×0.5°) with real observations",
               color="white", fontsize=13)
 ax1.set_xlabel("Longitude", color="white"); ax1.set_ylabel("Latitude", color="white")
 ax1.tick_params(colors="white")
@@ -205,5 +205,5 @@ for sp in ax7.spines.values(): sp.set_edgecolor("#444")
 
 fig_path = FIG_DIR / "step4_dataset_quality.png"
 plt.savefig(fig_path, dpi=150, bbox_inches="tight", facecolor="#0d1117")
-print(f"图保存至: {fig_path}")
+print(f"figure saved to: {fig_path}")
 plt.close()

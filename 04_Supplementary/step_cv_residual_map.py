@@ -31,7 +31,7 @@ TARGET = "q"
 
 df = pd.read_csv(DATA)
 df = df.dropna(subset=FEATURE_COLS + [TARGET]).reset_index(drop=True)
-print(f"总记录数: {len(df):,}  网格数: {df[['grid_lat','grid_lon']].drop_duplicates().shape[0]:,}")
+print(f"total records: {len(df):,}  grid cells: {df[['grid_lat','grid_lon']].drop_duplicates().shape[0]:,}")
 
 
 BLOCK_SIZE = 2.0
@@ -42,7 +42,7 @@ df["block_id"] = (
 
 bc = df["block_id"].value_counts()
 df = df[df["block_id"].isin(bc[bc >= 3].index)].reset_index(drop=True)
-print(f"过滤后记录数: {len(df):,}  空间块数: {df['block_id'].nunique():,}")
+print(f"records after filtering: {len(df):,}  spatial blocks: {df['block_id'].nunique():,}")
 
 
 N_FOLDS = 5
@@ -55,7 +55,7 @@ df["fold"] = df["block_id"].map(fold_assignments)
 df["cv_pred"]     = np.nan
 df["cv_residual"] = np.nan
 
-print(f"\n开始 {N_FOLDS}-Fold 空间交叉验证...")
+print(f"\nstarting {N_FOLDS}-Fold spatial cross-validation...")
 fold_metrics = []
 
 for fold in range(N_FOLDS):
@@ -83,7 +83,7 @@ all_pred = df["cv_pred"].values
 r2_all   = r2_score(all_true, all_pred)
 rmse_all = float(np.sqrt(mean_squared_error(all_true, all_pred)))
 mae_all  = float(mean_absolute_error(all_true, all_pred))
-print(f"\n全局 CV 指标（所有折合并）:")
+print(f"\nglobal CV metrics (all folds pooled):")
 print(f"  R²={r2_all:.4f}  RMSE={rmse_all:.2f}  MAE={mae_all:.2f}")
 
 
@@ -93,15 +93,15 @@ grid_res = (
     .reset_index()
     .rename(columns={"cv_residual": "residual"})
 )
-print(f"\n网格点数: {len(grid_res):,}")
-print(f"残差统计: mean={grid_res.residual.mean():.2f}  std={grid_res.residual.std():.2f}")
-print(f"  >+30 mW/m²: {(grid_res.residual > 30).sum()} 个网格（高估）")
-print(f"  <-30 mW/m²: {(grid_res.residual < -30).sum()} 个网格（低估）")
+print(f"\ngrid points: {len(grid_res):,}")
+print(f"residual statistics: mean={grid_res.residual.mean():.2f}  std={grid_res.residual.std():.2f}")
+print(f"  >+30 mW/m²: {(grid_res.residual > 30).sum()} grid cells (overestimated)")
+print(f"  <-30 mW/m²: {(grid_res.residual < -30).sum()} grid cells (underestimated)")
 
 
 if "basin" in df.columns:
     basin_stats = df.groupby("basin")["cv_residual"].agg(["mean", "std", "count"])
-    print(f"\n分洋盆残差:")
+    print(f"\nbasin-wise residuals:")
     print(basin_stats.to_string())
 
 
@@ -144,10 +144,10 @@ ax.set_title(
 out_path = FIG_DIR / "step_cv_residual_map.png"
 fig.savefig(out_path, dpi=200, bbox_inches="tight")
 plt.close()
-print(f"\n图已保存: {out_path}")
+print(f"\nsaved figure: {out_path}")
 
 
-print("\n低估最严重的20个网格（残差 < -30）:")
+print("\n20 most underestimated grid cells (residual < -30):")
 print(grid_res[grid_res.residual < -30].sort_values("residual").head(20).to_string(index=False))
-print("\n高估最严重的20个网格（残差 > +30）:")
+print("\n20 most overestimated grid cells (residual > +30):")
 print(grid_res[grid_res.residual > 30].sort_values("residual", ascending=False).head(20).to_string(index=False))

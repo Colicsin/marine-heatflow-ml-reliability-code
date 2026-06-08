@@ -113,22 +113,22 @@ def heatflow_stats(data):
 
 
 print("=" * 72)
-print("W2 补充实验：分组尺度稳健性与非单调性深度分析")
+print("W2 supplementary experiment: block-size robustness and non-monotonicity analysis")
 print("=" * 72)
 
 df = pd.read_csv(DATA_PATH).dropna(subset=FEATURE_COLS + [TARGET])
 df = df[df[TARGET] > 0].copy()
-print(f"  观测数据: {len(df):,} 条\n")
+print(f"  observations: {len(df):,}\n")
 
 
 print("=" * 72)
-print("Part A: 多种子 × 多尺度完整实验（含随机划分基线）")
+print("Part A: multi-seed, multi-scale experiment with a random-split baseline")
 print("=" * 72)
 
 all_results = []
 
 
-print("\n--- 随机划分基线 ---")
+print("\n--- random-split baseline ---")
 for seed in SEEDS:
     X = df[FEATURE_COLS].values
     y = df[TARGET].values
@@ -156,7 +156,7 @@ for seed in SEEDS:
           f"R²={m['R2']:.4f}  RMSE={m['RMSE']:.2f}  Moran_I={moran_i:.4f}")
 
 
-print("\n--- 空间分组实验 ---")
+print("\n--- spatial-block experiments ---")
 composition_data = []
 
 for bs in BLOCK_SIZES:
@@ -164,7 +164,7 @@ for bs in BLOCK_SIZES:
     for seed in SEEDS:
         tr, te, meta = spatial_block_split(df, bs, seed)
         if len(te) < 50:
-            print(f"    seed={seed}: 测试集过小({len(te)})，跳过")
+            print(f"    seed={seed}: test set too small ({len(te)}), skipped")
             continue
 
         et = ExtraTreesRegressor(n_estimators=100, max_depth=20,
@@ -209,19 +209,19 @@ for bs in BLOCK_SIZES:
 
 res_df = pd.DataFrame(all_results)
 res_df.to_csv(OUT_DIR / "step17_W2_block_full_results.csv", index=False)
-print(f"\n已保存: outputs/step17_W2_block_full_results.csv")
+print(f"\nsaved: outputs/step17_W2_block_full_results.csv")
 
 
 comp_df = pd.DataFrame(composition_data)
 comp_df.to_csv(OUT_DIR / "step17_W2_block_composition_analysis.csv", index=False)
-print(f"已保存: outputs/step17_W2_block_composition_analysis.csv")
+print(f"saved: outputs/step17_W2_block_composition_analysis.csv")
 
 
 print("\n" + "=" * 72)
-print("Part B: 各尺度汇总统计（均值 ± 标准差）")
+print("Part B: summary statistics by scale (mean ± std)")
 print("=" * 72)
 
-print(f"\n{'尺度':<12} {'R² mean':>10} {'R² std':>10} {'RMSE mean':>12} "
+print(f"\n{'scale':<12} {'R² mean':>10} {'R² std':>10} {'RMSE mean':>12} "
       f"{'RMSE std':>10} {'Moran mean':>12} {'n_test mean':>12} "
       f"{'n_dropped':>12}")
 print("-" * 100)
@@ -264,24 +264,24 @@ for bs in BLOCK_SIZES:
 
 
 r2_random_mean = sub_rand["R2"].mean()
-print(f"\n随机划分 R² 均值 = {r2_random_mean:.4f}")
-print("各空间分组 ΔR²（随机 - 空间）:")
+print(f"\nrandom-split mean R² = {r2_random_mean:.4f}")
+print("Spatial-block ΔR² values (random - spatial):")
 for bs in BLOCK_SIZES:
     sub = res_df[res_df["block_size"] == bs]
     if len(sub) == 0:
         continue
     delta = r2_random_mean - sub["R2"].mean()
     print(f"  {bs}°×{bs}°: ΔR² = {delta:.4f} "
-          f"(相对下降 {delta / r2_random_mean * 100:.1f}%)")
+          f"(relative decrease {delta / r2_random_mean * 100:.1f}%)")
 
 
 print("\n" + "=" * 72)
-print("Part C: 非单调性归因 — 测试集构成差异分析")
+print("Part C: attribution of non-monotonicity through test-set composition analysis")
 print("=" * 72)
 
 if len(comp_df) > 0:
-    print("\n各尺度下测试集构成差异（seed=42 为例）:")
-    print(f"{'尺度':<10} {'n_test':>8} {'dropped':>8} "
+    print("\nTest-set composition differences by scale (seed=42 example):")
+    print(f"{'scale':<10} {'n_test':>8} {'dropped':>8} "
           f"{'Pac%':>8} {'Atl%':>8} {'Ind%':>8} "
           f"{'q_mean':>8} {'q_std':>8} {'high%':>8} {'R²':>8}")
     print("-" * 90)
@@ -302,8 +302,8 @@ if len(comp_df) > 0:
               f"{r['R2']:>8.4f}")
 
 
-    print("\n各尺度下测试集构成的跨种子变异:")
-    print(f"{'尺度':<10} {'n_test CV%':>12} {'q_mean CV%':>12} "
+    print("\nCross-seed variation in test-set composition by scale:")
+    print(f"{'scale':<10} {'n_test CV%':>12} {'q_mean CV%':>12} "
           f"{'Pac% range':>12} {'high% range':>12}")
     print("-" * 62)
     for bs in BLOCK_SIZES:
@@ -318,13 +318,13 @@ if len(comp_df) > 0:
               f"{pac_range:>12.1f} {high_range:>12.1f}")
 
 
-    print("\n非单调性解释:")
+    print("\nNon-monotonicity explanation:")
     for bs_a, bs_b in [(1.5, 2.0)]:
         sub_a = comp_df[comp_df["block_size"] == bs_a]
         sub_b = comp_df[comp_df["block_size"] == bs_b]
         if len(sub_a) == 0 or len(sub_b) == 0:
             continue
-        print(f"\n  {bs_a}° vs {bs_b}° 对比:")
+        print(f"\n  {bs_a}° vs {bs_b}° comparison:")
         print(f"    {bs_a}°: R² mean={sub_a['R2'].mean():.4f}  "
               f"n_dropped mean={sub_a['n_dropped'].mean():.0f}  "
               f"n_test mean={sub_a['n_test'].mean():.0f}")
@@ -332,17 +332,17 @@ if len(comp_df) > 0:
               f"n_dropped mean={sub_b['n_dropped'].mean():.0f}  "
               f"n_test mean={sub_b['n_test'].mean():.0f}")
         drop_diff = sub_a["n_dropped"].mean() - sub_b["n_dropped"].mean()
-        print(f"    {bs_a}° 比 {bs_b}° 多剔除 {drop_diff:.0f} 个样本")
-        print(f"    → 较小分组尺度产生更多稀疏分组（<3样本），"
-              f"被剔除后测试集构成发生偏移")
+        print(f"    {bs_a}° removes {drop_diff:.0f} more samples than {bs_b}°")
+        print(f"    → Smaller block sizes create more sparse groups (<3 samples),"
+              f"and removing them shifts the test-set composition")
 
 
 print("\n" + "=" * 72)
-print("Part D: 可视化")
+print("Part D: visualization")
 print("=" * 72)
 
 
-print("绘制图1：R² 分布箱线图...")
+print("plotting Figure 1: R² distribution boxplot...")
 fig, axes = plt.subplots(1, 2, figsize=(16, 6))
 
 
@@ -409,10 +409,10 @@ plt.tight_layout()
 fig.savefig(FIG_DIR / "step17_W2_r2_by_blocksize_seeds.png",
             dpi=200, bbox_inches="tight")
 plt.close(fig)
-print("  已保存: step17_W2_r2_by_blocksize_seeds.png")
+print("  saved: step17_W2_r2_by_blocksize_seeds.png")
 
 
-print("绘制图2：测试集构成分析...")
+print("plotting Figure 2: test-set composition analysis...")
 fig, axes = plt.subplots(2, 2, figsize=(14, 10))
 
 if len(comp_df) > 0:
@@ -465,16 +465,16 @@ if len(comp_df) > 0:
     ax.legend(fontsize=9)
     ax.spines[["top", "right"]].set_visible(False)
 
-plt.suptitle("W2: Test Set Composition Analysis — What Drives R² Variation?",
+plt.suptitle("W2: Test Set Composition Analysis  -  What Drives R² Variation?",
              fontsize=13, fontweight="bold")
 plt.tight_layout()
 fig.savefig(FIG_DIR / "step17_W2_composition_analysis.png",
             dpi=200, bbox_inches="tight")
 plt.close(fig)
-print("  已保存: step17_W2_composition_analysis.png")
+print("  saved: step17_W2_composition_analysis.png")
 
 
-print("绘制图3：随机 vs 空间分组全景对比...")
+print("plotting Figure 3: overview comparison of random and spatial-block validation...")
 fig, ax = plt.subplots(figsize=(12, 6))
 
 
@@ -508,7 +508,7 @@ ax.plot(x_pos_line, r2_means, "s--", color="black", linewidth=2.5,
 ax.set_xticks(x_pos_line)
 ax.set_xticklabels(x_labels, fontsize=11)
 ax.set_ylabel("R²", fontsize=12)
-ax.set_title("R² Across Validation Strategies — All Seeds\n"
+ax.set_title("R² Across Validation Strategies  -  All Seeds\n"
              "(Any reasonable spatial blocking significantly reduces R²)",
              fontsize=12, fontweight="bold")
 ax.legend(fontsize=9, ncol=3)
@@ -519,14 +519,14 @@ plt.tight_layout()
 fig.savefig(FIG_DIR / "step17_W2_random_vs_spatial_all.png",
             dpi=200, bbox_inches="tight")
 plt.close(fig)
-print("  已保存: step17_W2_random_vs_spatial_all.png")
+print("  saved: step17_W2_random_vs_spatial_all.png")
 
 
 print("\n" + "=" * 72)
-print("W2 补充实验全部完成！")
+print("W2 supplementary experiment all done!")
 print(f"  CSV   outputs/step17_W2_block_full_results.csv")
 print(f"  CSV   outputs/step17_W2_block_composition_analysis.csv")
-print(f"  图1   step17_W2_r2_by_blocksize_seeds.png")
-print(f"  图2   step17_W2_composition_analysis.png")
-print(f"  图3   step17_W2_random_vs_spatial_all.png")
+print(f"  Figure 1   step17_W2_r2_by_blocksize_seeds.png")
+print(f"  Figure 2   step17_W2_composition_analysis.png")
+print(f"  Figure 3   step17_W2_random_vs_spatial_all.png")
 print("=" * 72)
